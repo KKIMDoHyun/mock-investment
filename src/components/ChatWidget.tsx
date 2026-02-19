@@ -673,6 +673,14 @@ export default function ChatWidget() {
             />
           ) : (
             <>
+              {/* 투자 면책 안내 배너 */}
+              <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 shrink-0">
+                <p className="text-[10px] sm:text-[11px] text-amber-400/90 text-center leading-relaxed">
+                  ⚠️ 채팅 내용은 투자 조언이 아닙니다. 투자 판단의 근거로
+                  사용하지 마세요.
+                </p>
+              </div>
+
               {/* 메시지 영역 */}
               <div
                 ref={scrollContainerRef}
