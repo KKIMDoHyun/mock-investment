@@ -1,9 +1,14 @@
 import { useState, useCallback } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { useTradingStore, calcPnl, type Trade } from "@/store/tradingStore";
+import {
+  useTradingStore,
+  calcPnl,
+  type Trade,
+  type LimitOrder,
+} from "@/store/tradingStore";
 
-type Tab = "positions" | "history";
+type Tab = "positions" | "orders" | "history";
 
 // ── 빈 상태 ──
 function EmptyState({ message }: { message: string }) {
@@ -64,7 +69,9 @@ const fmtDateShort = (iso: string | null) => {
 function PriceSkeleton({ className }: { className?: string }) {
   return (
     <span
-      className={`inline-block h-4 w-16 rounded bg-muted-foreground/20 animate-pulse ${className ?? ""}`}
+      className={`inline-block h-4 w-16 rounded bg-muted-foreground/20 animate-pulse ${
+        className ?? ""
+      }`}
     />
   );
 }
@@ -130,6 +137,20 @@ function PositionRow({ trade }: { trade: Trade }) {
       {/* 청산가 */}
       <td className="py-2.5 px-3 text-right tabular-nums text-sm text-yellow-400">
         {priceReady ? `$${fmtUsd(liqPrice)}` : <PriceSkeleton />}
+      </td>
+
+      {/* TP / SL */}
+      <td className="py-2.5 px-3 text-right tabular-nums text-xs">
+        {trade.tp_price ? (
+          <div className="text-emerald-400">${fmtUsd(trade.tp_price)}</div>
+        ) : (
+          <div className="text-muted-foreground/40">—</div>
+        )}
+        {trade.sl_price ? (
+          <div className="text-red-400">${fmtUsd(trade.sl_price)}</div>
+        ) : (
+          <div className="text-muted-foreground/40">—</div>
+        )}
       </td>
 
       {/* 미실현 손익 */}
@@ -257,15 +278,207 @@ function PositionCard({ trade }: { trade: Trade }) {
         <div className="flex justify-between">
           <span className="text-muted-foreground">현재가</span>
           <span className="text-foreground tabular-nums">
-            {priceReady ? `$${fmtUsd(currentPrice)}` : <PriceSkeleton className="w-16 h-3.5" />}
+            {priceReady ? (
+              `$${fmtUsd(currentPrice)}`
+            ) : (
+              <PriceSkeleton className="w-16 h-3.5" />
+            )}
           </span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">청산가</span>
           <span className="text-yellow-400 tabular-nums">
-            {priceReady ? `$${fmtUsd(liqPrice)}` : <PriceSkeleton className="w-16 h-3.5" />}
+            {priceReady ? (
+              `$${fmtUsd(liqPrice)}`
+            ) : (
+              <PriceSkeleton className="w-16 h-3.5" />
+            )}
           </span>
         </div>
+        {trade.tp_price && (
+          <div className="flex justify-between">
+            <span className="text-emerald-400/70">🎯 TP</span>
+            <span className="text-emerald-400 tabular-nums">
+              ${fmtUsd(trade.tp_price)}
+            </span>
+          </div>
+        )}
+        {trade.sl_price && (
+          <div className="flex justify-between">
+            <span className="text-red-400/70">🛑 SL</span>
+            <span className="text-red-400 tabular-nums">
+              ${fmtUsd(trade.sl_price)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── 개별 대기 주문 행 (데스크탑) ──
+function PendingOrderRow({ order }: { order: LimitOrder }) {
+  const cancelLimitOrder = useTradingStore((s) => s.cancelLimitOrder);
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancel = useCallback(async () => {
+    setCancelling(true);
+    const result = await cancelLimitOrder(order.id);
+    setCancelling(false);
+
+    if (result.success) {
+      toast.success(result.message);
+    } else {
+      toast.error(result.message);
+    }
+  }, [order.id, cancelLimitOrder]);
+
+  return (
+    <tr className="border-b border-border/50 hover:bg-accent/20 transition-colors">
+      <td className="py-2.5 px-3">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-foreground text-sm">BTCUSDT</span>
+          <span
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+              order.position_type === "LONG"
+                ? "text-emerald-400 bg-emerald-400/10"
+                : "text-red-400 bg-red-400/10"
+            }`}
+          >
+            {order.position_type}
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {order.leverage}x
+          </span>
+        </div>
+      </td>
+      <td className="py-2.5 px-3 text-right tabular-nums text-sm text-foreground">
+        ${fmtUsd(order.margin)}
+      </td>
+      <td className="py-2.5 px-3 text-right tabular-nums text-sm text-indigo-400 font-medium">
+        ${fmtUsd(order.limit_price)}
+      </td>
+      {/* TP / SL */}
+      <td className="py-2.5 px-3 text-right tabular-nums text-xs">
+        {order.tp_price ? (
+          <div className="text-emerald-400">${fmtUsd(order.tp_price)}</div>
+        ) : (
+          <div className="text-muted-foreground/40">—</div>
+        )}
+        {order.sl_price ? (
+          <div className="text-red-400">${fmtUsd(order.sl_price)}</div>
+        ) : (
+          <div className="text-muted-foreground/40">—</div>
+        )}
+      </td>
+      <td className="py-2.5 px-3 text-right tabular-nums text-sm text-amber-400">
+        ${fmtUsd(order.fee)}
+      </td>
+      <td className="py-2.5 px-3 text-sm text-muted-foreground whitespace-nowrap">
+        {fmtDateShort(order.created_at)}
+      </td>
+      <td className="py-2.5 px-3 text-center">
+        <button
+          onClick={handleCancel}
+          disabled={cancelling}
+          className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <X className="h-3 w-3" />
+          취소
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+// ── 개별 대기 주문 카드 (모바일) ──
+function PendingOrderCard({ order }: { order: LimitOrder }) {
+  const cancelLimitOrder = useTradingStore((s) => s.cancelLimitOrder);
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancel = useCallback(async () => {
+    setCancelling(true);
+    const result = await cancelLimitOrder(order.id);
+    setCancelling(false);
+
+    if (result.success) {
+      toast.success(result.message);
+    } else {
+      toast.error(result.message);
+    }
+  }, [order.id, cancelLimitOrder]);
+
+  return (
+    <div className="border-b border-border/50 px-3 py-3 space-y-2">
+      {/* 헤더: 종목 + 취소 버튼 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-foreground text-sm">BTCUSDT</span>
+          <span
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+              order.position_type === "LONG"
+                ? "text-emerald-400 bg-emerald-400/10"
+                : "text-red-400 bg-red-400/10"
+            }`}
+          >
+            {order.position_type}
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {order.leverage}x
+          </span>
+        </div>
+        <button
+          onClick={handleCancel}
+          disabled={cancelling}
+          className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <X className="h-3 w-3" />
+          취소
+        </button>
+      </div>
+
+      {/* 상세 정보 */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">증거금</span>
+          <span className="text-foreground tabular-nums">
+            ${fmtUsd(order.margin)}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">지정가</span>
+          <span className="text-indigo-400 tabular-nums font-medium">
+            ${fmtUsd(order.limit_price)}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">수수료</span>
+          <span className="text-amber-400 tabular-nums">
+            ${fmtUsd(order.fee)}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">등록일</span>
+          <span className="text-foreground tabular-nums">
+            {fmtDateShort(order.created_at)}
+          </span>
+        </div>
+        {order.tp_price && (
+          <div className="flex justify-between">
+            <span className="text-emerald-400/70">🎯 TP</span>
+            <span className="text-emerald-400 tabular-nums">
+              ${fmtUsd(order.tp_price)}
+            </span>
+          </div>
+        )}
+        {order.sl_price && (
+          <div className="flex justify-between">
+            <span className="text-red-400/70">🛑 SL</span>
+            <span className="text-red-400 tabular-nums">
+              ${fmtUsd(order.sl_price)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -291,6 +504,7 @@ function PositionsTable() {
               <th className="text-right py-2.5 px-3 font-medium">진입가</th>
               <th className="text-right py-2.5 px-3 font-medium">현재가</th>
               <th className="text-right py-2.5 px-3 font-medium">청산가</th>
+              <th className="text-right py-2.5 px-3 font-medium">TP / SL</th>
               <th className="text-right py-2.5 px-3 font-medium">
                 미실현 손익
               </th>
@@ -309,6 +523,48 @@ function PositionsTable() {
       <div className="md:hidden">
         {positions.map((trade) => (
           <PositionCard key={trade.id} trade={trade} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── 대기 주문 테이블 ──
+function PendingOrdersTable() {
+  const pendingOrders = useTradingStore((s) => s.pendingOrders);
+
+  if (pendingOrders.length === 0) {
+    return <EmptyState message="대기 중인 주문이 없습니다" />;
+  }
+
+  return (
+    <>
+      {/* 데스크탑 테이블 */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-muted-foreground border-b border-border">
+              <th className="text-left py-2.5 px-3 font-medium">종목</th>
+              <th className="text-right py-2.5 px-3 font-medium">증거금</th>
+              <th className="text-right py-2.5 px-3 font-medium">지정가</th>
+              <th className="text-right py-2.5 px-3 font-medium">TP / SL</th>
+              <th className="text-right py-2.5 px-3 font-medium">수수료</th>
+              <th className="text-left py-2.5 px-3 font-medium">등록일</th>
+              <th className="text-center py-2.5 px-3 font-medium">취소</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pendingOrders.map((order) => (
+              <PendingOrderRow key={order.id} order={order} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 모바일 카드 */}
+      <div className="md:hidden">
+        {pendingOrders.map((order) => (
+          <PendingOrderCard key={order.id} order={order} />
         ))}
       </div>
     </>
@@ -456,6 +712,7 @@ function HistoryTable() {
 export default function PositionsPanel() {
   const [activeTab, setActiveTab] = useState<Tab>("positions");
   const positions = useTradingStore((s) => s.positions);
+  const pendingOrders = useTradingStore((s) => s.pendingOrders);
   const closedTrades = useTradingStore((s) => s.closedTrades);
 
   return (
@@ -477,6 +734,25 @@ export default function PositionsPanel() {
             </span>
           )}
           {activeTab === "positions" && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" />
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab("orders")}
+          className={`px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors cursor-pointer relative ${
+            activeTab === "orders"
+              ? "text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          대기 주문
+          {pendingOrders.length > 0 && (
+            <span className="ml-1.5 text-[10px] sm:text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">
+              {pendingOrders.length}
+            </span>
+          )}
+          {activeTab === "orders" && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" />
           )}
         </button>
@@ -504,6 +780,7 @@ export default function PositionsPanel() {
       {/* 탭 컨텐츠 */}
       <div className="min-h-[120px] sm:min-h-[160px]">
         {activeTab === "positions" && <PositionsTable />}
+        {activeTab === "orders" && <PendingOrdersTable />}
         {activeTab === "history" && <HistoryTable />}
       </div>
     </div>

@@ -1,5 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { BarChart3, BookOpen } from "lucide-react";
 import TradingChart from "@/components/TradingChart";
+import OrderBook from "@/components/OrderBook";
 import TradingPanel from "@/components/TradingPanel";
 import PositionsPanel from "@/components/PositionsPanel";
 import { useTradingStore } from "@/store/tradingStore";
@@ -21,11 +23,58 @@ function PriceDisplay() {
   );
 }
 
+// ── 모바일 차트/호가 탭 전환 (lg 이상에서는 숨김) ──
+function MobileChartOrderBook() {
+  const [mobileTab, setMobileTab] = useState<"chart" | "orderbook">("chart");
+
+  return (
+    <div className="lg:hidden flex flex-col">
+      {/* 탭 토글 */}
+      <div className="flex bg-card border border-border rounded-t-xl overflow-hidden">
+        <button
+          onClick={() => setMobileTab("chart")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors cursor-pointer ${
+            mobileTab === "chart"
+              ? "bg-indigo-500/15 text-indigo-400 border-b-2 border-indigo-500"
+              : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
+          }`}
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          차트
+        </button>
+        <button
+          onClick={() => setMobileTab("orderbook")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors cursor-pointer ${
+            mobileTab === "orderbook"
+              ? "bg-indigo-500/15 text-indigo-400 border-b-2 border-indigo-500"
+              : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
+          }`}
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          호가창
+        </button>
+      </div>
+
+      {/* 콘텐츠 */}
+      {mobileTab === "chart" ? (
+        <div className="bg-card border border-border border-t-0 rounded-b-xl overflow-hidden h-[250px] sm:h-[350px]">
+          <TradingChart />
+        </div>
+      ) : (
+        <div className="border border-border border-t-0 rounded-b-xl overflow-hidden h-[250px] sm:h-[350px]">
+          <OrderBook />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const user = useAuthStore((s) => s.user);
   const fetchPortfolio = useTradingStore((s) => s.fetchPortfolio);
   const fetchOpenPositions = useTradingStore((s) => s.fetchOpenPositions);
   const fetchClosedTrades = useTradingStore((s) => s.fetchClosedTrades);
+  const fetchPendingOrders = useTradingStore((s) => s.fetchPendingOrders);
 
   // 유저 데이터 로드
   useEffect(() => {
@@ -33,8 +82,15 @@ export default function HomePage() {
       fetchPortfolio(user.id);
       fetchOpenPositions(user.id);
       fetchClosedTrades(user.id);
+      fetchPendingOrders(user.id);
     }
-  }, [user?.id, fetchPortfolio, fetchOpenPositions, fetchClosedTrades]);
+  }, [
+    user?.id,
+    fetchPortfolio,
+    fetchOpenPositions,
+    fetchClosedTrades,
+    fetchPendingOrders,
+  ]);
 
   return (
     <main className="flex-1 w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col gap-2 sm:gap-4">
@@ -67,11 +123,19 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── 차트 + 주문 패널 ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-2 sm:gap-4 flex-1">
-        {/* 차트 */}
-        <div className="bg-card border border-border rounded-xl overflow-hidden min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+      {/* ── 차트 + 호가창 + 주문 패널 ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_180px_320px] gap-2 sm:gap-4 flex-1">
+        {/* 모바일: 차트/호가 탭 전환 */}
+        <MobileChartOrderBook />
+
+        {/* 데스크탑: 차트 (항상 보임) */}
+        <div className="hidden lg:block bg-card border border-border rounded-xl overflow-hidden lg:min-h-[500px]">
           <TradingChart />
+        </div>
+
+        {/* 데스크탑: 호가창 (항상 보임) */}
+        <div className="hidden lg:block lg:max-h-[500px]">
+          <OrderBook />
         </div>
 
         {/* 주문 패널 */}

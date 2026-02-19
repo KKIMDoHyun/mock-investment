@@ -1,13 +1,31 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { TrendingUp, TrendingDown, Gift, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
-import { useTradingStore } from "@/store/tradingStore";
+import {
+  useTradingStore,
+  MARKET_FEE_RATE,
+  LIMIT_FEE_RATE,
+  calcFee,
+} from "@/store/tradingStore";
 import { Button } from "@/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/ui/tabs";
 
-const LEVERAGE_PRESETS = [1, 2, 5, 10, 20, 50, 75, 100, 125];
+const LEVERAGE_PRESETS = [1, 2, 5, 10, 20, 50];
 const PERCENT_PRESETS = [10, 25, 50, 100];
+const TP_PRESETS = [5, 10, 25, 50]; // +%
+const SL_PRESETS = [-1, -2, -5, -10]; // -%
+
+type OrderType = "market" | "limit";
+
+/** 숫자 문자열에 천 단위 쉼표 추가 (예: "100000.5" → "100,000.5") */
+function addCommas(s: string): string {
+  if (!s) return s;
+  const parts = s.split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return parts.join(".");
+}
 
 export default function TradingPanel() {
   const user = useAuthStore((s) => s.user);
@@ -18,6 +36,9 @@ export default function TradingPanel() {
   const lastAttendanceDate = useTradingStore((s) => s.lastAttendanceDate);
   const claimAttendance = useTradingStore((s) => s.claimAttendance);
   const openPosition = useTradingStore((s) => s.openPosition);
+  const submitLimitOrder = useTradingStore((s) => s.submitLimitOrder);
+  const orderBookPrice = useTradingStore((s) => s.orderBookPrice);
+  const setOrderBookPrice = useTradingStore((s) => s.setOrderBookPrice);
 
   // 오늘 이미 출석체크 했는지 판별
   const todayKST = (() => {
@@ -27,9 +48,46 @@ export default function TradingPanel() {
   })();
   const alreadyClaimed = lastAttendanceDate === todayKST;
 
+  const [orderType, setOrderType] = useState<OrderType>("market");
   const [leverage, setLeverage] = useState(10);
   const [marginInput, setMarginInput] = useState("");
+  const [limitPriceInput, setLimitPriceInput] = useState("");
+  const [tpPriceInput, setTpPriceInput] = useState("");
+  const [slPriceInput, setSlPriceInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // 지정가 입력 ref (flash animation용)
+  const limitPriceRef = useRef<HTMLInputElement>(null);
+
+  // ── 호가창 / 차트 가격 클릭 → 지정가 자동 입력 ──
+  useEffect(() => {
+    if (orderBookPrice == null) return;
+
+    // 1) 지정가 탭으로 전환 + 가격 입력
+    setOrderType("limit");
+    setLimitPriceInput(
+      orderBookPrice.toLocaleString("en-US", {
+        maximumFractionDigits: 2,
+        useGrouping: false,
+      })
+    );
+
+    // 2) 소비 후 초기화
+    setOrderBookPrice(null);
+
+    // 3) 반짝이는 애니메이션 (탭 전환 렌더 후 실행되도록 지연)
+    const timer = setTimeout(() => {
+      const el = limitPriceRef.current;
+      if (el) {
+        el.classList.remove("price-flash");
+        void el.offsetWidth; // reflow
+        el.classList.add("price-flash");
+        el.focus();
+      }
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [orderBookPrice, setOrderBookPrice]);
 
   // 출석체크
   const handleAttendance = useCallback(async () => {
@@ -42,16 +100,59 @@ export default function TradingPanel() {
     }
   }, [user, claimAttendance]);
 
-  // 비율 버튼
+  // 비율 버튼 (수수료 역산 적용)
+  // maxMargin = balance / (1 + leverage * feeRate) → 수수료 포함해도 잔고 초과 안 함
   const handlePercentClick = useCallback(
     (percent: number) => {
-      const amount = (balance * percent) / 100;
-      setMarginInput(amount.toFixed(2));
+      const rate = orderType === "market" ? MARKET_FEE_RATE : LIMIT_FEE_RATE;
+      const maxMargin = balance / (1 + leverage * rate);
+      const amount = (maxMargin * percent) / 100;
+      // 소수점 이하 내림 처리하여 1원이라도 넘치지 않도록
+      setMarginInput(Math.floor(amount * 100) / 100 + "");
     },
-    [balance]
+    [balance, leverage, orderType]
   );
 
-  // 주문 실행
+  // 수수료 계산
+  const marginValue = parseFloat(marginInput) || 0;
+  const feeRate = orderType === "market" ? MARKET_FEE_RATE : LIMIT_FEE_RATE;
+  const estimatedFee = calcFee(marginValue, leverage, feeRate);
+  const positionSize = marginValue * leverage;
+  const totalCost = marginValue + estimatedFee;
+
+  // TP/SL 기준가 및 ROE 계산
+  const basePrice = parseFloat(limitPriceInput) || currentPrice;
+  const tpValue = parseFloat(tpPriceInput) || 0;
+  const slValue = parseFloat(slPriceInput) || 0;
+  const tpRoe =
+    tpValue > 0 && basePrice > 0
+      ? ((tpValue - basePrice) / basePrice) * leverage * 100
+      : null;
+  const slRoe =
+    slValue > 0 && basePrice > 0
+      ? ((slValue - basePrice) / basePrice) * leverage * 100
+      : null;
+
+  // TP/SL % 프리셋 버튼 핸들러
+  const handleTpPercent = useCallback(
+    (pct: number) => {
+      const base = parseFloat(limitPriceInput) || currentPrice;
+      if (base <= 0) return;
+      setTpPriceInput((base * (1 + pct / 100)).toFixed(2));
+    },
+    [limitPriceInput, currentPrice]
+  );
+
+  const handleSlPercent = useCallback(
+    (pct: number) => {
+      const base = parseFloat(limitPriceInput) || currentPrice;
+      if (base <= 0) return;
+      setSlPriceInput((base * (1 + pct / 100)).toFixed(2));
+    },
+    [limitPriceInput, currentPrice]
+  );
+
+  // 주문 실행 (시장가 + 지정가 통합)
   const handleTrade = useCallback(
     async (direction: "LONG" | "SHORT") => {
       if (!user) {
@@ -64,35 +165,93 @@ export default function TradingPanel() {
         toast.error("주문 금액을 입력해주세요.");
         return;
       }
-      if (currentPrice <= 0) {
+
+      // 수수료 포함 최종 검증
+      const rate = orderType === "market" ? MARKET_FEE_RATE : LIMIT_FEE_RATE;
+      const fee = calcFee(margin, leverage, rate);
+      if (margin + fee > balance) {
         toast.error(
-          "현재 가격을 불러오는 중입니다. 잠시 후 다시 시도해주세요."
+          "잔고가 부족합니다. (수수료 포함) 비율 버튼을 이용해보세요."
         );
         return;
       }
 
       setSubmitting(true);
-      const result = await openPosition({
-        userId: user.id,
-        positionType: direction,
-        leverage,
-        margin,
-        entryPrice: currentPrice,
-      });
-      setSubmitting(false);
 
-      if (result.success) {
-        toast.success(result.message);
-        setMarginInput("");
+      if (orderType === "market") {
+        // ── 시장가 주문 ──
+        if (currentPrice <= 0) {
+          toast.error(
+            "현재 가격을 불러오는 중입니다. 잠시 후 다시 시도해주세요."
+          );
+          setSubmitting(false);
+          return;
+        }
+
+        const result = await openPosition({
+          userId: user.id,
+          positionType: direction,
+          leverage,
+          margin,
+          entryPrice: currentPrice,
+        });
+
+        if (result.success) {
+          toast.success(result.message);
+          setMarginInput("");
+        } else {
+          toast.error(result.message);
+        }
       } else {
-        toast.error(result.message);
-      }
-    },
-    [user, marginInput, leverage, currentPrice, openPosition, navigate]
-  );
+        // ── 지정가 주문 ──
+        const limitPrice = parseFloat(limitPriceInput);
+        if (isNaN(limitPrice) || limitPrice <= 0) {
+          toast.error("체결 가격을 입력해주세요.");
+          setSubmitting(false);
+          return;
+        }
 
-  const marginValue = parseFloat(marginInput) || 0;
-  const positionSize = marginValue * leverage;
+        const tpPrice = parseFloat(tpPriceInput) || undefined;
+        const slPrice = parseFloat(slPriceInput) || undefined;
+
+        const result = await submitLimitOrder({
+          userId: user.id,
+          positionType: direction,
+          leverage,
+          margin,
+          limitPrice,
+          tpPrice,
+          slPrice,
+        });
+
+        if (result.success) {
+          toast.success(result.message);
+          setMarginInput("");
+          setLimitPriceInput("");
+          setTpPriceInput("");
+          setSlPriceInput("");
+        } else {
+          toast.error(result.message);
+        }
+      }
+
+      setSubmitting(false);
+    },
+    [
+      user,
+      marginInput,
+      limitPriceInput,
+      tpPriceInput,
+      slPriceInput,
+      leverage,
+      balance,
+      currentPrice,
+      orderType,
+      openPosition,
+      submitLimitOrder,
+      navigate,
+    ]
+  );
 
   return (
     <div className="bg-card border border-border rounded-xl p-3 sm:p-5 flex flex-col gap-3 sm:gap-4">
@@ -157,6 +316,141 @@ export default function TradingPanel() {
         </p>
       </div>
 
+      {/* ── 주문 유형 탭 (시장가 / 지정가) ── */}
+      <Tabs
+        value={orderType}
+        onValueChange={(v) => setOrderType(v as OrderType)}
+      >
+        <TabsList>
+          <TabsTrigger value="market">시장가</TabsTrigger>
+          <TabsTrigger value="limit">지정가</TabsTrigger>
+        </TabsList>
+
+        {/* 지정가 → 체결 가격 + TP/SL 입력 */}
+        <TabsContent value="limit">
+          <div className="mt-2 space-y-2">
+            {/* 체결 가격 */}
+            <div>
+              <label className="text-[10px] sm:text-xs text-muted-foreground mb-1 block">
+                체결 가격 (USDT)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  $
+                </span>
+                <input
+                  ref={limitPriceRef}
+                  type="text"
+                  value={addCommas(limitPriceInput)}
+                  onChange={(e) =>
+                    setLimitPriceInput(e.target.value.replace(/[^0-9.]/g, ""))
+                  }
+                  className="w-full bg-secondary border border-border rounded-lg pl-7 pr-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring tabular-nums"
+                  placeholder={
+                    currentPrice > 0
+                      ? currentPrice.toLocaleString(undefined, {
+                          maximumFractionDigits: 2,
+                        })
+                      : "가격 입력"
+                  }
+                />
+              </div>
+            </div>
+
+            {/* TP / SL */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* ── TP (익절가) ── */}
+              <div>
+                <label className="text-[10px] sm:text-xs text-emerald-400/80 mb-1 block">
+                  TP (익절가)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    $
+                  </span>
+                  <input
+                    type="text"
+                    value={addCommas(tpPriceInput)}
+                    onChange={(e) =>
+                      setTpPriceInput(e.target.value.replace(/[^0-9.]/g, ""))
+                    }
+                    className="w-full bg-secondary border border-border rounded-lg pl-6 pr-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-emerald-500/50 tabular-nums"
+                    placeholder="선택"
+                  />
+                </div>
+                {/* TP % 프리셋 */}
+                <div className="flex gap-1 mt-1">
+                  {TP_PRESETS.map((pct) => (
+                    <button
+                      key={pct}
+                      onClick={() => handleTpPercent(pct)}
+                      className="flex-1 text-[10px] py-0.5 rounded bg-emerald-500/10 text-emerald-400/80 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                    >
+                      +{pct}%
+                    </button>
+                  ))}
+                </div>
+                {/* TP 예상 수익률 */}
+                {tpRoe !== null && (
+                  <p
+                    className={`text-[10px] mt-0.5 tabular-nums ${
+                      tpRoe >= 0 ? "text-emerald-400" : "text-red-400"
+                    }`}
+                  >
+                    예상 ROE: {tpRoe >= 0 ? "+" : ""}
+                    {tpRoe.toFixed(2)}%
+                  </p>
+                )}
+              </div>
+
+              {/* ── SL (손절가) ── */}
+              <div>
+                <label className="text-[10px] sm:text-xs text-red-400/80 mb-1 block">
+                  SL (손절가)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    $
+                  </span>
+                  <input
+                    type="text"
+                    value={addCommas(slPriceInput)}
+                    onChange={(e) =>
+                      setSlPriceInput(e.target.value.replace(/[^0-9.]/g, ""))
+                    }
+                    className="w-full bg-secondary border border-border rounded-lg pl-6 pr-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-red-500/50 tabular-nums"
+                    placeholder="선택"
+                  />
+                </div>
+                {/* SL % 프리셋 */}
+                <div className="flex gap-1 mt-1">
+                  {SL_PRESETS.map((pct) => (
+                    <button
+                      key={pct}
+                      onClick={() => handleSlPercent(pct)}
+                      className="flex-1 text-[10px] py-0.5 rounded bg-red-500/10 text-red-400/80 hover:bg-red-500/20 transition-colors cursor-pointer"
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+                {/* SL 예상 수익률 */}
+                {slRoe !== null && (
+                  <p
+                    className={`text-[10px] mt-0.5 tabular-nums ${
+                      slRoe >= 0 ? "text-emerald-400" : "text-red-400"
+                    }`}
+                  >
+                    예상 ROE: {slRoe >= 0 ? "+" : ""}
+                    {slRoe.toFixed(2)}%
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
+
       {/* ── 레버리지 슬라이더 ── */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
@@ -170,7 +464,7 @@ export default function TradingPanel() {
         <input
           type="range"
           min={1}
-          max={125}
+          max={50}
           value={leverage}
           onChange={(e) => setLeverage(Number(e.target.value))}
           className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-indigo-500
@@ -205,7 +499,7 @@ export default function TradingPanel() {
           </span>
           <input
             type="text"
-            value={marginInput}
+            value={addCommas(marginInput)}
             onChange={(e) =>
               setMarginInput(e.target.value.replace(/[^0-9.]/g, ""))
             }
@@ -227,7 +521,7 @@ export default function TradingPanel() {
         </div>
       </div>
 
-      {/* ── 포지션 사이즈 미리보기 ── */}
+      {/* ── 포지션 사이즈 + 수수료 미리보기 ── */}
       {marginValue > 0 && (
         <div className="bg-secondary/60 rounded-lg px-3 py-2 text-[11px] sm:text-xs text-muted-foreground space-y-1">
           <div className="flex justify-between">
@@ -240,33 +534,118 @@ export default function TradingPanel() {
             </span>
           </div>
           <div className="flex justify-between">
-            <span>예상 청산가 (Long)</span>
-            <span className="text-foreground font-medium tabular-nums">
+            <span>
+              예상 수수료 ({orderType === "market" ? "0.04%" : "0.02%"})
+            </span>
+            <span className="text-amber-400 font-medium tabular-nums">
               $
-              {currentPrice > 0
-                ? (currentPrice * (1 - 1 / leverage)).toLocaleString(
-                    undefined,
-                    {
-                      maximumFractionDigits: 2,
-                    }
-                  )
-                : "—"}
+              {estimatedFee.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </span>
           </div>
           <div className="flex justify-between">
-            <span>예상 청산가 (Short)</span>
+            <span>필요 금액</span>
             <span className="text-foreground font-medium tabular-nums">
               $
-              {currentPrice > 0
-                ? (currentPrice * (1 + 1 / leverage)).toLocaleString(
-                    undefined,
-                    {
-                      maximumFractionDigits: 2,
-                    }
-                  )
-                : "—"}
+              {totalCost.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </span>
           </div>
+          <div className="h-px bg-border/50 my-0.5" />
+          {orderType === "market" && (
+            <>
+              <div className="flex justify-between">
+                <span>예상 청산가 (Long)</span>
+                <span className="text-foreground font-medium tabular-nums">
+                  $
+                  {currentPrice > 0
+                    ? (currentPrice * (1 - 1 / leverage)).toLocaleString(
+                        undefined,
+                        {
+                          maximumFractionDigits: 2,
+                        }
+                      )
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>예상 청산가 (Short)</span>
+                <span className="text-foreground font-medium tabular-nums">
+                  $
+                  {currentPrice > 0
+                    ? (currentPrice * (1 + 1 / leverage)).toLocaleString(
+                        undefined,
+                        {
+                          maximumFractionDigits: 2,
+                        }
+                      )
+                    : "—"}
+                </span>
+              </div>
+            </>
+          )}
+          {orderType === "limit" && parseFloat(limitPriceInput) > 0 && (
+            <>
+              <div className="flex justify-between">
+                <span>예상 청산가 (Long)</span>
+                <span className="text-foreground font-medium tabular-nums">
+                  $
+                  {(
+                    parseFloat(limitPriceInput) *
+                    (1 - 1 / leverage)
+                  ).toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>예상 청산가 (Short)</span>
+                <span className="text-foreground font-medium tabular-nums">
+                  $
+                  {(
+                    parseFloat(limitPriceInput) *
+                    (1 + 1 / leverage)
+                  ).toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+              {(parseFloat(tpPriceInput) > 0 ||
+                parseFloat(slPriceInput) > 0) && (
+                <>
+                  <div className="h-px bg-border/50 my-0.5" />
+                  {parseFloat(tpPriceInput) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-emerald-400/80">
+                        🎯 익절가 (TP)
+                      </span>
+                      <span className="text-emerald-400 font-medium tabular-nums">
+                        $
+                        {parseFloat(tpPriceInput).toLocaleString(undefined, {
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  {parseFloat(slPriceInput) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-red-400/80">🛑 손절가 (SL)</span>
+                      <span className="text-red-400 font-medium tabular-nums">
+                        $
+                        {parseFloat(slPriceInput).toLocaleString(undefined, {
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </div>
       )}
 

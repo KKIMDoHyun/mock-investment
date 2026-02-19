@@ -1,5 +1,22 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+
+// ── 수수료율 상수 ──
+
+/** 시장가(Taker) 수수료 0.04% */
+export const MARKET_FEE_RATE = 0.0004;
+/** 지정가(Maker) 수수료 0.02% */
+export const LIMIT_FEE_RATE = 0.0002;
+
+/** 수수료 계산: (증거금 × 레버리지) × 수수료율 */
+export function calcFee(
+  margin: number,
+  leverage: number,
+  feeRate: number
+): number {
+  return margin * leverage * feeRate;
+}
 
 // ── 타입 정의 ──
 
@@ -11,9 +28,26 @@ export interface Trade {
   margin: number;
   entry_price: number;
   close_price: number | null;
+  tp_price: number | null;
+  sl_price: number | null;
   status: "OPEN" | "CLOSED";
   created_at: string;
   closed_at: string | null;
+}
+
+export interface LimitOrder {
+  id: string;
+  user_id: string;
+  position_type: "LONG" | "SHORT";
+  leverage: number;
+  margin: number;
+  limit_price: number;
+  tp_price: number | null;
+  sl_price: number | null;
+  fee: number;
+  type: "LIMIT";
+  status: "PENDING" | "FILLED" | "CANCELLED";
+  created_at: string;
 }
 
 interface TradingState {
@@ -25,6 +59,8 @@ interface TradingState {
   positions: Trade[];
   /** CLOSED 포지션 목록 (거래 내역) */
   closedTrades: Trade[];
+  /** PENDING 지정가 주문 목록 */
+  pendingOrders: LimitOrder[];
   /** 마지막 출석체크 날짜 (YYYY-MM-DD) */
   lastAttendanceDate: string | null;
   /** 데이터 로딩 중 여부 */
@@ -47,7 +83,10 @@ interface TradingState {
   /** CLOSED 포지션 조회 (거래 내역) */
   fetchClosedTrades: (userId: string) => Promise<void>;
 
-  /** 포지션 오픈 */
+  /** PENDING 지정가 주문 조회 */
+  fetchPendingOrders: (userId: string) => Promise<void>;
+
+  /** 포지션 오픈 (시장가) */
   openPosition: (params: {
     userId: string;
     positionType: "LONG" | "SHORT";
@@ -61,6 +100,26 @@ interface TradingState {
     tradeId: string,
     closePrice: number
   ) => Promise<{ success: boolean; message: string }>;
+
+  /** 지정가 주문 제출 */
+  submitLimitOrder: (params: {
+    userId: string;
+    positionType: "LONG" | "SHORT";
+    leverage: number;
+    margin: number;
+    limitPrice: number;
+    tpPrice?: number;
+    slPrice?: number;
+  }) => Promise<{ success: boolean; message: string }>;
+
+  /** 지정가 주문 취소 */
+  cancelLimitOrder: (
+    orderId: string
+  ) => Promise<{ success: boolean; message: string }>;
+
+  /** 호가창에서 선택된 가격 (→ TradingPanel 연동) */
+  orderBookPrice: number | null;
+  setOrderBookPrice: (price: number | null) => void;
 }
 
 // ────────────────────────────────────────────
@@ -76,6 +135,250 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = RECONNECT_BASE_MS;
 let lastPriceTs = 0;
 let streamActive = false; // startPriceStream 호출 여부
+
+// ── 헬퍼: 포지션 병합(물타기) 또는 신규 생성 ──
+
+interface MergeResult {
+  trade: Trade | null;
+  merged: boolean;
+  mergedFromId?: string;
+  hasTpSl?: boolean;
+  error?: string;
+}
+
+async function mergeOrCreatePosition(params: {
+  userId: string;
+  positionType: "LONG" | "SHORT";
+  leverage: number;
+  margin: number;
+  entryPrice: number;
+  tpPrice?: number | null;
+  slPrice?: number | null;
+}): Promise<MergeResult> {
+  // 1) 동일 방향 OPEN 포지션이 이미 있는지 확인
+  const { data: existingRows } = await supabase
+    .from("trades")
+    .select("*")
+    .eq("user_id", params.userId)
+    .eq("position_type", params.positionType)
+    .eq("status", "OPEN")
+    .limit(1);
+
+  const existingRaw =
+    existingRows && existingRows.length > 0 ? existingRows[0] : null;
+
+  if (existingRaw) {
+    const existing = sanitizeTrade(existingRaw as Record<string, unknown>);
+
+    // ── 가중평균 진입가 계산 ──
+    // 수량(BTC) = (증거금 × 레버리지) / 진입가
+    const oldNotional = existing.margin * existing.leverage;
+    const newNotional = params.margin * params.leverage;
+    const oldQty = oldNotional / existing.entry_price;
+    const newQty = newNotional / params.entryPrice;
+    const totalQty = oldQty + newQty;
+
+    const mergedEntry =
+      (oldQty * existing.entry_price + newQty * params.entryPrice) / totalQty;
+
+    // ── 증거금 합산 ──
+    const mergedMargin = existing.margin + params.margin;
+
+    // ── 실효 레버리지 재계산 ──
+    // 총 명목가치 / 총 증거금 (DB integer 컬럼이므로 반올림)
+    const mergedLeverage = Math.round(
+      (oldNotional + newNotional) / mergedMargin
+    );
+
+    // ── 기존 TP/SL 유지 ──
+    const hasTpSl = existing.tp_price != null || existing.sl_price != null;
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("trades")
+      .update({
+        entry_price: mergedEntry,
+        margin: mergedMargin,
+        leverage: mergedLeverage,
+        // tp_price, sl_price는 기존 값 유지 (건드리지 않음)
+      })
+      .eq("id", existing.id)
+      .select()
+      .single();
+
+    if (updateErr || !updated) {
+      return {
+        trade: null,
+        merged: false,
+        error: updateErr?.message ?? "포지션 병합 실패",
+      };
+    }
+
+    return {
+      trade: sanitizeTrade(updated as Record<string, unknown>),
+      merged: true,
+      mergedFromId: existing.id,
+      hasTpSl,
+    };
+  }
+
+  // 2) 기존 포지션 없음 → 신규 생성
+  const { data: newTrade, error: tradeErr } = await supabase
+    .from("trades")
+    .insert({
+      user_id: params.userId,
+      position_type: params.positionType,
+      leverage: params.leverage,
+      margin: params.margin,
+      entry_price: params.entryPrice,
+      tp_price: params.tpPrice ?? null,
+      sl_price: params.slPrice ?? null,
+      status: "OPEN",
+    })
+    .select()
+    .single();
+
+  if (tradeErr || !newTrade) {
+    return {
+      trade: null,
+      merged: false,
+      error: tradeErr?.message ?? "포지션 생성 실패",
+    };
+  }
+
+  return {
+    trade: sanitizeTrade(newTrade as Record<string, unknown>),
+    merged: false,
+  };
+}
+
+// ── 지정가 주문 체결 감시 ──
+let isCheckingOrders = false;
+
+async function checkAndFillPendingOrders(currentPrice: number) {
+  if (isCheckingOrders) return;
+  const { pendingOrders } = useTradingStore.getState();
+  if (pendingOrders.length === 0) return;
+
+  isCheckingOrders = true;
+  try {
+    const ordersToFill = pendingOrders.filter((o) => {
+      if (o.position_type === "LONG") return currentPrice <= o.limit_price;
+      if (o.position_type === "SHORT") return currentPrice >= o.limit_price;
+      return false;
+    });
+
+    for (const order of ordersToFill) {
+      // 1) 주문 상태 → FILLED
+      const { error: orderErr } = await supabase
+        .from("orders")
+        .update({ status: "FILLED" })
+        .eq("id", order.id);
+
+      if (orderErr) continue;
+
+      // 2) 포지션 병합 또는 신규 생성 (TP/SL 전이)
+      const result = await mergeOrCreatePosition({
+        userId: order.user_id,
+        positionType: order.position_type,
+        leverage: order.leverage,
+        margin: order.margin,
+        entryPrice: order.limit_price,
+        tpPrice: order.tp_price,
+        slPrice: order.sl_price,
+      });
+
+      if (!result.trade) continue;
+
+      // 3) 로컬 상태 동기화
+      if (result.merged && result.mergedFromId) {
+        // 물타기: 기존 포지션 교체
+        useTradingStore.setState((s) => ({
+          pendingOrders: s.pendingOrders.filter((o) => o.id !== order.id),
+          positions: s.positions.map((p) =>
+            p.id === result.mergedFromId ? result.trade! : p
+          ),
+        }));
+
+        toast.success(
+          `${order.position_type} ${order.leverage}x 지정가 체결 (물타기)! @ $${order.limit_price.toLocaleString()}`
+        );
+        if (result.hasTpSl) {
+          toast.info(
+            "📊 평단가가 변경되었습니다. TP/SL을 확인해주세요."
+          );
+        }
+      } else {
+        // 신규 포지션
+        useTradingStore.setState((s) => ({
+          pendingOrders: s.pendingOrders.filter((o) => o.id !== order.id),
+          positions: [result.trade!, ...s.positions],
+        }));
+
+        toast.success(
+          `${order.position_type} ${order.leverage}x 지정가 체결! @ $${order.limit_price.toLocaleString()}`
+        );
+      }
+    }
+  } finally {
+    isCheckingOrders = false;
+  }
+}
+
+// ── TP/SL 자동 체결 감시 ──
+let isCheckingTpSl = false;
+
+async function checkTpSlPositions(currentPrice: number) {
+  if (isCheckingTpSl) return;
+  const state = useTradingStore.getState();
+  if (state.positions.length === 0) return;
+
+  // TP/SL이 설정된 포지션만 필터
+  const candidates = state.positions.filter(
+    (t) => t.tp_price != null || t.sl_price != null
+  );
+  if (candidates.length === 0) return;
+
+  isCheckingTpSl = true;
+  try {
+    // 이터레이션 중 positions 변경 방지를 위해 스냅샷 사용
+    for (const trade of [...candidates]) {
+      let closePrice = 0;
+      let reason = "";
+
+      if (trade.position_type === "LONG") {
+        if (trade.tp_price && currentPrice >= trade.tp_price) {
+          closePrice = trade.tp_price;
+          reason = "🎯 TP";
+        } else if (trade.sl_price && currentPrice <= trade.sl_price) {
+          closePrice = trade.sl_price;
+          reason = "🛑 SL";
+        }
+      } else {
+        // SHORT
+        if (trade.tp_price && currentPrice <= trade.tp_price) {
+          closePrice = trade.tp_price;
+          reason = "🎯 TP";
+        } else if (trade.sl_price && currentPrice >= trade.sl_price) {
+          closePrice = trade.sl_price;
+          reason = "🛑 SL";
+        }
+      }
+
+      if (closePrice > 0) {
+        const result = await useTradingStore
+          .getState()
+          .closePosition(trade.id, closePrice);
+        if (result.success) {
+          toast.info(
+            `${reason} 체결! ${trade.position_type} ${trade.leverage}x @ $${closePrice.toLocaleString()}`
+          );
+        }
+      }
+    }
+  } finally {
+    isCheckingTpSl = false;
+  }
+}
 
 function connectPriceWs() {
   if (!streamActive) return;
@@ -101,6 +404,11 @@ function connectPriceWs() {
       if (Number.isFinite(price) && price > 0) {
         lastPriceTs = now;
         useTradingStore.setState({ currentPrice: price });
+
+        // 지정가 주문 체결 체크 (비동기 — WebSocket 블로킹 X)
+        checkAndFillPendingOrders(price);
+        // TP/SL 자동 체결 체크
+        checkTpSlPositions(price);
       }
     } catch {
       // 비정상 메시지 무시
@@ -122,13 +430,13 @@ function connectPriceWs() {
   };
 }
 
-/** 가격 스트림 시작 (HomePage 마운트 시 호출) */
+/** 가격 스트림 시작 (RootLayout 마운트 시 호출) */
 export function startPriceStream() {
   streamActive = true;
   connectPriceWs();
 }
 
-/** 가격 스트림 중지 (HomePage 언마운트 시 호출) */
+/** 가격 스트림 중지 (RootLayout 언마운트 시 호출) */
 export function stopPriceStream() {
   streamActive = false;
   if (reconnectTimer) {
@@ -163,7 +471,22 @@ export function sanitizeTrade(raw: Record<string, unknown>): Trade {
     margin: toNum(raw.margin),
     entry_price: toNum(raw.entry_price),
     close_price: raw.close_price != null ? toNum(raw.close_price) : null,
+    tp_price: raw.tp_price != null ? toNum(raw.tp_price) : null,
+    sl_price: raw.sl_price != null ? toNum(raw.sl_price) : null,
   } as Trade;
+}
+
+/** LimitOrder 객체의 숫자 필드를 실제 number 타입으로 보정 */
+export function sanitizeLimitOrder(raw: Record<string, unknown>): LimitOrder {
+  return {
+    ...raw,
+    leverage: toNum(raw.leverage),
+    margin: toNum(raw.margin),
+    limit_price: toNum(raw.limit_price),
+    tp_price: raw.tp_price != null ? toNum(raw.tp_price) : null,
+    sl_price: raw.sl_price != null ? toNum(raw.sl_price) : null,
+    fee: toNum(raw.fee),
+  } as LimitOrder;
 }
 
 // ── 헬퍼: PnL 계산 ──
@@ -210,10 +533,14 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   balance: 0,
   positions: [],
   closedTrades: [],
+  pendingOrders: [],
   lastAttendanceDate: null,
   loading: false,
 
   setCurrentPrice: (price) => set({ currentPrice: price }),
+
+  orderBookPrice: null,
+  setOrderBookPrice: (price) => set({ orderBookPrice: price }),
 
   // ── 포트폴리오 조회 ──
   fetchPortfolio: async (userId) => {
@@ -359,7 +686,33 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     set({ closedTrades });
   },
 
-  // ── 포지션 오픈 ──
+  // ── PENDING 지정가 주문 조회 ──
+  fetchPendingOrders: async (userId) => {
+    const { data, error } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "PENDING")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("대기 주문 조회 에러:", error.message);
+      return;
+    }
+
+    const pendingOrders = (data ?? []).map((row) =>
+      sanitizeLimitOrder(row as Record<string, unknown>)
+    );
+    set({ pendingOrders });
+
+    // 현재 가격이 이미 있으면 즉시 체결 체크 (앱 재접속 시)
+    const { currentPrice } = get();
+    if (currentPrice > 0 && pendingOrders.length > 0) {
+      checkAndFillPendingOrders(currentPrice);
+    }
+  },
+
+  // ── 포지션 오픈 (시장가) ──
   openPosition: async ({
     userId,
     positionType,
@@ -369,12 +722,16 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   }) => {
     const { balance } = get();
 
+    // 수수료 계산
+    const fee = calcFee(margin, leverage, MARKET_FEE_RATE);
+    const totalCost = margin + fee;
+
     // 검증
     if (margin <= 0) {
       return { success: false, message: "주문 금액을 입력해주세요." };
     }
-    if (margin > balance) {
-      return { success: false, message: "잔고가 부족합니다." };
+    if (totalCost > balance) {
+      return { success: false, message: "잔고가 부족합니다. (수수료 포함)" };
     }
     if (entryPrice <= 0) {
       return {
@@ -383,8 +740,8 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       };
     }
 
-    // 1) 잔고 차감
-    const newBalance = balance - margin;
+    // 1) 잔고 차감 (증거금 + 수수료)
+    const newBalance = balance - totalCost;
     const { error: balanceErr } = await supabase
       .from("portfolios")
       .update({ balance: newBalance })
@@ -397,21 +754,16 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       };
     }
 
-    // 2) 포지션 저장 — .select().single() 로 삽입된 행 직접 반환
-    const { data: newTrade, error: tradeErr } = await supabase
-      .from("trades")
-      .insert({
-        user_id: userId,
-        position_type: positionType,
-        leverage,
-        margin,
-        entry_price: entryPrice,
-        status: "OPEN",
-      })
-      .select()
-      .single();
+    // 2) 포지션 병합 또는 신규 생성
+    const result = await mergeOrCreatePosition({
+      userId,
+      positionType,
+      leverage,
+      margin,
+      entryPrice,
+    });
 
-    if (tradeErr || !newTrade) {
+    if (!result.trade) {
       // 롤백: 잔고 복구
       await supabase
         .from("portfolios")
@@ -419,21 +771,43 @@ export const useTradingStore = create<TradingState>((set, get) => ({
         .eq("user_id", userId);
       return {
         success: false,
-        message: `포지션 생성 에러: ${tradeErr?.message ?? "데이터 반환 실패"}`,
+        message: `포지션 에러: ${result.error ?? "데이터 반환 실패"}`,
       };
     }
 
-    // 3) 상태 동기화 — re-fetch 없이 직접 추가
-    const trade = sanitizeTrade(newTrade as Record<string, unknown>);
-    set((state) => ({
-      balance: newBalance,
-      positions: [trade, ...state.positions],
-    }));
+    // 3) 상태 동기화
+    if (result.merged && result.mergedFromId) {
+      // 물타기: 기존 포지션을 업데이트된 데이터로 교체
+      set((state) => ({
+        balance: newBalance,
+        positions: state.positions.map((p) =>
+          p.id === result.mergedFromId ? result.trade! : p
+        ),
+      }));
 
-    return {
-      success: true,
-      message: `${positionType} ${leverage}x 포지션 오픈! 💪`,
-    };
+      // TP/SL이 있으면 확인 필요 알림
+      if (result.hasTpSl) {
+        toast.info(
+          "📊 평단가가 변경되었습니다. TP/SL을 확인해주세요."
+        );
+      }
+
+      return {
+        success: true,
+        message: `${positionType} ${leverage}x 물타기 완료! 평단: $${result.trade.entry_price.toLocaleString(undefined, { maximumFractionDigits: 2 })} (수수료: $${fee.toFixed(2)}) 📊`,
+      };
+    } else {
+      // 신규 포지션
+      set((state) => ({
+        balance: newBalance,
+        positions: [result.trade!, ...state.positions],
+      }));
+
+      return {
+        success: true,
+        message: `${positionType} ${leverage}x 포지션 오픈! (수수료: $${fee.toFixed(2)}) 💪`,
+      };
+    }
   },
 
   // ── 포지션 종료 ──
@@ -447,7 +821,11 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
     // PnL 계산
     const { pnl } = calcPnl(trade, closePrice);
-    const returnAmount = trade.margin + pnl; // 원금 + 손익 (0 이하면 청산)
+
+    // 종료 수수료 계산 (시장가 기준)
+    const closeFee = calcFee(trade.margin, trade.leverage, MARKET_FEE_RATE);
+
+    const returnAmount = trade.margin + pnl - closeFee; // 원금 + 손익 - 수수료
     const finalReturn = Math.max(returnAmount, 0);
     const newBalance = balance + finalReturn;
 
@@ -500,7 +878,137 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
     return {
       success: true,
-      message: `포지션 종료! 손익: ${pnlText}`,
+      message: `포지션 종료! 손익: ${pnlText} (수수료: $${closeFee.toFixed(2)})`,
     };
+  },
+
+  // ── 지정가 주문 제출 ──
+  submitLimitOrder: async ({
+    userId,
+    positionType,
+    leverage,
+    margin,
+    limitPrice,
+    tpPrice,
+    slPrice,
+  }) => {
+    const { balance } = get();
+
+    // 수수료 계산 (지정가 = Maker)
+    const fee = calcFee(margin, leverage, LIMIT_FEE_RATE);
+    const totalCost = margin + fee;
+
+    // 검증
+    if (margin <= 0) {
+      return { success: false, message: "주문 금액을 입력해주세요." };
+    }
+    if (limitPrice <= 0) {
+      return { success: false, message: "체결 가격을 입력해주세요." };
+    }
+    if (totalCost > balance) {
+      return { success: false, message: "잔고가 부족합니다. (수수료 포함)" };
+    }
+
+    // 1) 잔고 차감 (증거금 + 수수료 Hold)
+    const newBalance = balance - totalCost;
+    const { error: balanceErr } = await supabase
+      .from("portfolios")
+      .update({ balance: newBalance })
+      .eq("user_id", userId);
+
+    if (balanceErr) {
+      return {
+        success: false,
+        message: `잔고 차감 에러: ${balanceErr.message}`,
+      };
+    }
+
+    // 2) 주문 삽입 (TP/SL 포함)
+    const { data: newOrder, error: orderErr } = await supabase
+      .from("orders")
+      .insert({
+        user_id: userId,
+        position_type: positionType,
+        leverage,
+        margin,
+        limit_price: limitPrice,
+        tp_price: tpPrice || null,
+        sl_price: slPrice || null,
+        fee,
+        type: "LIMIT",
+        status: "PENDING",
+      })
+      .select()
+      .single();
+
+    if (orderErr || !newOrder) {
+      // 롤백: 잔고 복구
+      await supabase
+        .from("portfolios")
+        .update({ balance })
+        .eq("user_id", userId);
+      return {
+        success: false,
+        message: `주문 생성 에러: ${orderErr?.message ?? "데이터 반환 실패"}`,
+      };
+    }
+
+    // 3) 상태 동기화
+    const order = sanitizeLimitOrder(newOrder as Record<string, unknown>);
+    set((s) => ({
+      balance: newBalance,
+      pendingOrders: [order, ...s.pendingOrders],
+    }));
+
+    return {
+      success: true,
+      message: `${positionType} ${leverage}x 지정가 주문 등록! @ $${limitPrice.toLocaleString()} 📝`,
+    };
+  },
+
+  // ── 지정가 주문 취소 ──
+  cancelLimitOrder: async (orderId) => {
+    const { pendingOrders, balance } = get();
+    const order = pendingOrders.find((o) => o.id === orderId);
+    if (!order) {
+      return { success: false, message: "주문을 찾을 수 없습니다." };
+    }
+
+    const refund = order.margin + order.fee;
+    const newBalance = balance + refund;
+
+    // 1) DB에서 삭제
+    const { error: deleteErr } = await supabase
+      .from("orders")
+      .delete()
+      .eq("id", orderId);
+
+    if (deleteErr) {
+      return {
+        success: false,
+        message: `주문 취소 에러: ${deleteErr.message}`,
+      };
+    }
+
+    // 2) 잔고 복구
+    const { error: balanceErr } = await supabase
+      .from("portfolios")
+      .update({ balance: newBalance })
+      .eq("user_id", order.user_id);
+
+    if (balanceErr) {
+      return {
+        success: false,
+        message: `잔고 복구 에러: ${balanceErr.message}`,
+      };
+    }
+
+    // 3) 상태 동기화
+    set((s) => ({
+      balance: newBalance,
+      pendingOrders: s.pendingOrders.filter((o) => o.id !== orderId),
+    }));
+
+    return { success: true, message: "주문이 취소되었습니다." };
   },
 }));
