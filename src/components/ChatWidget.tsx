@@ -6,8 +6,10 @@ import {
   TrendingUp,
   ChevronUp,
   Loader2,
+  ShieldAlert,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import { useTradingStore, calcPnl } from "@/store/tradingStore";
 import type { Trade } from "@/store/tradingStore";
@@ -294,11 +296,117 @@ function PositionPicker({
   );
 }
 
+// ── 채팅 규정 동의 화면 ──
+function ChatRulesAgreement({ onAgreed }: { onAgreed: () => void }) {
+  const agreeToChatRules = useAuthStore((s) => s.agreeToChatRules);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleAgree = async () => {
+    setSubmitting(true);
+    const result = await agreeToChatRules();
+    setSubmitting(false);
+
+    if (result.success) {
+      toast.success("채팅방에 입장합니다!");
+      onAgreed();
+    } else {
+      toast.error(result.message);
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* 스크롤 영역 */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex flex-col items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-amber-500/15 rounded-xl flex items-center justify-center">
+            <ShieldAlert className="h-6 w-6 text-amber-400" />
+          </div>
+          <h3 className="text-base font-bold text-foreground text-center">
+            채팅방 이용 규정
+          </h3>
+          <p className="text-xs text-muted-foreground text-center">
+            원활한 채팅 이용을 위해 아래 규정에 동의해 주세요.
+          </p>
+        </div>
+
+        <div className="bg-secondary/40 border border-border rounded-xl p-3.5 text-[13px] text-muted-foreground space-y-2.5 leading-relaxed">
+          <ul className="list-disc list-inside space-y-1.5">
+            <li>
+              <strong className="text-foreground">욕설, 비하, 혐오 표현</strong>
+              을 포함한 메시지는 삭제될 수 있습니다.
+            </li>
+            <li>
+              <strong className="text-foreground">
+                광고, 스팸, 외부 링크 홍보
+              </strong>
+              는 금지됩니다.
+            </li>
+            <li>
+              <strong className="text-foreground">
+                개인정보(실명, 연락처, 주소 등)
+              </strong>
+              를 공개하지 마세요.
+            </li>
+            <li>
+              타인에 대한{" "}
+              <strong className="text-foreground">
+                사칭, 명예훼손, 괴롭힘
+              </strong>
+              은 금지됩니다.
+            </li>
+            <li>
+              본 채팅방의 메시지는{" "}
+              <strong className="text-foreground">투자 조언이 아니며</strong>,
+              다른 유저의 의견을 투자 근거로 삼아서는 안 됩니다.
+            </li>
+            <li>
+              <strong className="text-foreground">
+                20분이 지난 메시지는 자동 삭제
+              </strong>
+              됩니다.
+            </li>
+            <li>
+              규정 위반 시 채팅 이용이{" "}
+              <strong className="text-foreground">제한</strong>될 수 있습니다.
+            </li>
+          </ul>
+
+          <div className="border-t border-border pt-2.5 mt-2.5">
+            <p className="text-[11px] text-muted-foreground/80">
+              동의 시각은 서버에 영구 기록됩니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 하단 동의 버튼 */}
+      <div className="px-4 py-3 border-t border-border shrink-0">
+        <button
+          onClick={handleAgree}
+          disabled={submitting}
+          className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm cursor-pointer"
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              처리 중...
+            </>
+          ) : (
+            "동의하고 입장하기"
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── 메인 ChatWidget ──
 export default function ChatWidget() {
   const user = useAuthStore((s) => s.user);
   const nickname = useAuthStore((s) => s.nickname);
   const avatarUrl = useAuthStore((s) => s.avatarUrl);
+  const chatRulesAgreedAt = useAuthStore((s) => s.chatRulesAgreedAt);
   const positions = useTradingStore((s) => s.positions);
   const fetchOpenPositions = useTradingStore((s) => s.fetchOpenPositions);
 
@@ -553,155 +661,171 @@ export default function ChatWidget() {
             </button>
           </div>
 
-          {/* 메시지 영역 */}
-          <div
-            ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto px-3 py-3 space-y-3"
-          >
-            {loadingMessages ? (
-              <div className="flex flex-col items-center justify-center h-full gap-2">
-                <Loader2 className="h-6 w-6 text-indigo-400 animate-spin" />
-                <p className="text-xs text-muted-foreground">
-                  메시지를 불러오는 중...
-                </p>
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-xs text-muted-foreground">
-                  아직 메시지가 없습니다. 첫 메시지를 보내보세요!
-                </p>
-              </div>
-            ) : (
-              messages.map((msg) => {
-                const isMe = user?.id === msg.user_id;
-                const posData = isPositionMessage(msg.content)
-                  ? parsePositionMessage(msg.content)
-                  : null;
+          {/* 채팅 규정 미동의 시 동의 화면 표시 */}
+          {user && !chatRulesAgreedAt ? (
+            <ChatRulesAgreement
+              onAgreed={() => {
+                // 동의 후 메시지 로드
+                if (!loaded) {
+                  loadMessages().then(() => scrollToBottom(true));
+                }
+              }}
+            />
+          ) : (
+            <>
+              {/* 메시지 영역 */}
+              <div
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto px-3 py-3 space-y-3"
+              >
+                {loadingMessages ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-2">
+                    <Loader2 className="h-6 w-6 text-indigo-400 animate-spin" />
+                    <p className="text-xs text-muted-foreground">
+                      메시지를 불러오는 중...
+                    </p>
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-xs text-muted-foreground">
+                      아직 메시지가 없습니다. 첫 메시지를 보내보세요!
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((msg) => {
+                    const isMe = user?.id === msg.user_id;
+                    const posData = isPositionMessage(msg.content)
+                      ? parsePositionMessage(msg.content)
+                      : null;
 
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex gap-2 ${
-                      isMe ? "flex-row-reverse" : "flex-row"
-                    }`}
-                  >
-                    {/* 아바타 */}
-                    <UserAvatar
-                      nickname={isMe ? nickname ?? "나" : msg.nickname}
-                      avatarUrl={isMe ? avatarUrl : msg.avatar_url}
-                    />
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex gap-2 ${
+                          isMe ? "flex-row-reverse" : "flex-row"
+                        }`}
+                      >
+                        {/* 아바타 */}
+                        <UserAvatar
+                          nickname={isMe ? nickname ?? "나" : msg.nickname}
+                          avatarUrl={isMe ? avatarUrl : msg.avatar_url}
+                        />
 
-                    {/* 메시지 본문 */}
-                    <div
-                      className={`flex flex-col flex-1 min-w-0 ${
-                        isMe ? "items-end" : "items-start"
+                        {/* 메시지 본문 */}
+                        <div
+                          className={`flex flex-col flex-1 min-w-0 ${
+                            isMe ? "items-end" : "items-start"
+                          }`}
+                        >
+                          {/* 닉네임 + 시간 */}
+                          <div className="flex items-center gap-1.5 mb-0.5 px-1">
+                            <span
+                              className={`text-[11px] font-medium ${
+                                isMe
+                                  ? "text-indigo-400"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {isMe ? "나" : msg.nickname}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/60">
+                              {formatTime(msg.created_at)}
+                            </span>
+                          </div>
+
+                          {/* 포지션 카드 or 일반 메시지 */}
+                          {posData ? (
+                            <PositionCard data={posData} isMe={isMe} />
+                          ) : (
+                            <div
+                              className={`w-fit max-w-[85%] px-3 py-1.5 rounded-2xl text-sm break-words whitespace-pre-wrap ${
+                                isMe
+                                  ? "bg-indigo-500/20 text-foreground rounded-br-md"
+                                  : "bg-secondary text-foreground rounded-bl-md"
+                              }`}
+                            >
+                              {msg.content}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* 입력 영역 */}
+              <div className="relative px-3 py-2.5 border-t border-border bg-card shrink-0">
+                {/* 포지션 선택 패널 */}
+                {showPositionPicker && (
+                  <PositionPicker
+                    positions={positions}
+                    onSelect={handleSharePosition}
+                    onClose={() => setShowPositionPicker(false)}
+                  />
+                )}
+
+                {user ? (
+                  <div className="flex items-center gap-1.5">
+                    {/* 포지션 자랑 버튼 */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const willOpen = !showPositionPicker;
+                        setShowPositionPicker(willOpen);
+                        // 포지션 패널을 열 때 최신 포지션을 가져옴 (다른 페이지에서도 동작하도록)
+                        if (willOpen && user?.id) {
+                          fetchOpenPositions(user.id);
+                        }
+                      }}
+                      title="포지션 자랑하기"
+                      className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors ${
+                        showPositionPicker
+                          ? "bg-indigo-500/20 text-indigo-400"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                       }`}
                     >
-                      {/* 닉네임 + 시간 */}
-                      <div className="flex items-center gap-1.5 mb-0.5 px-1">
-                        <span
-                          className={`text-[11px] font-medium ${
-                            isMe ? "text-indigo-400" : "text-muted-foreground"
-                          }`}
-                        >
-                          {isMe ? "나" : msg.nickname}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground/60">
-                          {formatTime(msg.created_at)}
-                        </span>
-                      </div>
-
-                      {/* 포지션 카드 or 일반 메시지 */}
-                      {posData ? (
-                        <PositionCard data={posData} isMe={isMe} />
+                      {showPositionPicker ? (
+                        <ChevronUp className="h-4 w-4" />
                       ) : (
-                        <div
-                          className={`w-fit max-w-[85%] px-3 py-1.5 rounded-2xl text-sm break-words whitespace-pre-wrap ${
-                            isMe
-                              ? "bg-indigo-500/20 text-foreground rounded-br-md"
-                              : "bg-secondary text-foreground rounded-bl-md"
-                          }`}
-                        >
-                          {msg.content}
-                        </div>
+                        <TrendingUp className="h-4 w-4" />
                       )}
-                    </div>
+                    </button>
+
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          handleSend();
+                        }
+                      }}
+                      placeholder="메시지를 입력하세요..."
+                      maxLength={500}
+                      className="flex-1 min-w-0 bg-secondary/50 border border-border rounded-lg px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-indigo-500/50 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSend}
+                      disabled={!input.trim() || sending}
+                      className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-indigo-400 hover:text-indigo-300 disabled:text-muted-foreground/40 transition-colors"
+                    >
+                      <SendHorizontal className="h-4 w-4" />
+                    </button>
                   </div>
-                );
-              })
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* 입력 영역 */}
-          <div className="relative px-3 py-2.5 border-t border-border bg-card shrink-0">
-            {/* 포지션 선택 패널 */}
-            {showPositionPicker && (
-              <PositionPicker
-                positions={positions}
-                onSelect={handleSharePosition}
-                onClose={() => setShowPositionPicker(false)}
-              />
-            )}
-
-            {user ? (
-              <div className="flex items-center gap-1.5">
-                {/* 포지션 자랑 버튼 */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const willOpen = !showPositionPicker;
-                    setShowPositionPicker(willOpen);
-                    // 포지션 패널을 열 때 최신 포지션을 가져옴 (다른 페이지에서도 동작하도록)
-                    if (willOpen && user?.id) {
-                      fetchOpenPositions(user.id);
-                    }
-                  }}
-                  title="포지션 자랑하기"
-                  className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors ${
-                    showPositionPicker
-                      ? "bg-indigo-500/20 text-indigo-400"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                  }`}
-                >
-                  {showPositionPicker ? (
-                    <ChevronUp className="h-4 w-4" />
-                  ) : (
-                    <TrendingUp className="h-4 w-4" />
-                  )}
-                </button>
-
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  placeholder="메시지를 입력하세요..."
-                  maxLength={500}
-                  className="flex-1 min-w-0 bg-secondary/50 border border-border rounded-lg px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-indigo-500/50 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={handleSend}
-                  disabled={!input.trim() || sending}
-                  className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-indigo-400 hover:text-indigo-300 disabled:text-muted-foreground/40 transition-colors"
-                >
-                  <SendHorizontal className="h-4 w-4" />
-                </button>
+                ) : (
+                  <div className="bg-secondary/30 rounded-lg px-3 py-2 text-center">
+                    <p className="text-xs text-muted-foreground">
+                      로그인 후 이용할 수 있습니다.
+                    </p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="bg-secondary/30 rounded-lg px-3 py-2 text-center">
-                <p className="text-xs text-muted-foreground">
-                  로그인 후 이용할 수 있습니다.
-                </p>
-              </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       )}
     </>

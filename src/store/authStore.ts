@@ -10,6 +10,10 @@ interface AuthState {
   role: Role;
   nickname: string | null;
   avatarUrl: string | null;
+  /** 서비스 이용 동의 시간 (null = 미동의) */
+  termsAgreedAt: string | null;
+  /** 채팅 규정 동의 시간 (null = 미동의) */
+  chatRulesAgreedAt: string | null;
   /** 인증 초기화 로딩 (세션 복원) */
   loading: boolean;
   /** role 정보 로딩 완료 여부 */
@@ -23,6 +27,10 @@ interface AuthState {
   ) => Promise<{ success: boolean; message: string }>;
   /** 프로필 이미지 변경 (Supabase Storage 업로드 + profiles 테이블 갱신) */
   updateAvatar: (file: File) => Promise<{ success: boolean; message: string }>;
+  /** 서비스 이용 약관 동의 (DB 저장) */
+  agreeToTerms: () => Promise<{ success: boolean; message: string }>;
+  /** 채팅 규정 동의 (DB 저장) */
+  agreeToChatRules: () => Promise<{ success: boolean; message: string }>;
 }
 
 // ── 랜덤 닉네임 생성 (user_ + 영문/숫자 6자리) ──
@@ -103,26 +111,38 @@ async function upsertProfile(
 }
 
 /**
- * profiles 테이블에서 해당 유저의 role과 nickname을 가져옵니다.
+ * profiles 테이블에서 해당 유저의 role, nickname, 동의 정보를 가져옵니다.
  */
-async function fetchProfile(
-  userId: string
-): Promise<{ role: Role; nickname: string | null; avatarUrl: string | null }> {
+async function fetchProfile(userId: string): Promise<{
+  role: Role;
+  nickname: string | null;
+  avatarUrl: string | null;
+  termsAgreedAt: string | null;
+  chatRulesAgreedAt: string | null;
+}> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("role, nickname, avatar_url")
+    .select("role, nickname, avatar_url, terms_agreed_at, chat_rules_agreed_at")
     .eq("id", userId)
     .single();
 
   if (error) {
     console.error("프로필 조회 에러:", error.message);
-    return { role: "user", nickname: null, avatarUrl: null };
+    return {
+      role: "user",
+      nickname: null,
+      avatarUrl: null,
+      termsAgreedAt: null,
+      chatRulesAgreedAt: null,
+    };
   }
 
   return {
     role: (data?.role as Role) ?? "user",
     nickname: (data?.nickname as string) ?? null,
     avatarUrl: (data?.avatar_url as string) ?? null,
+    termsAgreedAt: (data?.terms_agreed_at as string) ?? null,
+    chatRulesAgreedAt: (data?.chat_rules_agreed_at as string) ?? null,
   };
 }
 
@@ -132,6 +152,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   role: "user",
   nickname: null,
   avatarUrl: null,
+  termsAgreedAt: null,
+  chatRulesAgreedAt: null,
   loading: true,
   roleLoaded: false,
 
@@ -150,7 +172,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (error) {
       console.error("로그아웃 에러:", error.message);
     }
-    set({ role: "user", roleLoaded: true, nickname: null, avatarUrl: null });
+    set({
+      role: "user",
+      roleLoaded: true,
+      nickname: null,
+      avatarUrl: null,
+      termsAgreedAt: null,
+      chatRulesAgreedAt: null,
+    });
   },
 
   updateNickname: async (nickname: string) => {
@@ -263,6 +292,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return { success: true, message: "프로필 이미지가 변경되었습니다! 🎉" };
   },
 
+  agreeToTerms: async () => {
+    const { user } = get();
+    if (!user) {
+      return { success: false, message: "로그인이 필요합니다." };
+    }
+
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ terms_agreed_at: now })
+      .eq("id", user.id);
+
+    if (error) {
+      console.error("서비스 동의 저장 에러:", error.message);
+      return { success: false, message: `동의 저장 실패: ${error.message}` };
+    }
+
+    set({ termsAgreedAt: now });
+    return { success: true, message: "서비스 이용에 동의했습니다." };
+  },
+
+  agreeToChatRules: async () => {
+    const { user } = get();
+    if (!user) {
+      return { success: false, message: "로그인이 필요합니다." };
+    }
+
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ chat_rules_agreed_at: now })
+      .eq("id", user.id);
+
+    if (error) {
+      console.error("채팅 규정 동의 저장 에러:", error.message);
+      return { success: false, message: `동의 저장 실패: ${error.message}` };
+    }
+
+    set({ chatRulesAgreedAt: now });
+    return { success: true, message: "채팅 규정에 동의했습니다." };
+  },
+
   initialize: () => {
     // 현재 세션을 즉시 가져옴 (localStorage에서 토큰 복원)
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -271,16 +342,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // 로딩 즉시 해제 (UI 렌더링 차단 방지)
       set({ session, user, loading: false });
 
-      // role + nickname + avatarUrl은 비동기로 가져온 뒤 플래그 설정
+      // role + nickname + avatarUrl + 동의 정보는 비동기로 가져온 뒤 플래그 설정
       if (user) {
-        fetchProfile(user.id).then(({ role, nickname, avatarUrl }) =>
-          set({ role, nickname, avatarUrl, roleLoaded: true })
+        fetchProfile(user.id).then(
+          ({ role, nickname, avatarUrl, termsAgreedAt, chatRulesAgreedAt }) =>
+            set({
+              role,
+              nickname,
+              avatarUrl,
+              termsAgreedAt,
+              chatRulesAgreedAt,
+              roleLoaded: true,
+            })
         );
       } else {
         set({
           role: "user",
           nickname: null,
           avatarUrl: null,
+          termsAgreedAt: null,
+          chatRulesAgreedAt: null,
           roleLoaded: true,
         });
       }
@@ -295,17 +376,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // 로딩 즉시 해제
       set({ session, user, loading: false });
 
-      // role + nickname + avatarUrl 비동기 fetch
+      // role + nickname + avatarUrl + 동의 정보 비동기 fetch
       if (user) {
         set({ roleLoaded: false });
-        fetchProfile(user.id).then(({ role, nickname, avatarUrl }) =>
-          set({ role, nickname, avatarUrl, roleLoaded: true })
+        fetchProfile(user.id).then(
+          ({ role, nickname, avatarUrl, termsAgreedAt, chatRulesAgreedAt }) =>
+            set({
+              role,
+              nickname,
+              avatarUrl,
+              termsAgreedAt,
+              chatRulesAgreedAt,
+              roleLoaded: true,
+            })
         );
       } else {
         set({
           role: "user",
           nickname: null,
           avatarUrl: null,
+          termsAgreedAt: null,
+          chatRulesAgreedAt: null,
           roleLoaded: true,
         });
       }

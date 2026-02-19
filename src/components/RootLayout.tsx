@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/authStore";
 import { startPriceStream, stopPriceStream } from "@/store/tradingStore";
 import Header from "@/components/Header";
 import NicknameSetupModal from "@/components/NicknameSetupModal";
+import TermsAgreementModal from "@/components/TermsAgreementModal";
 import ChatWidget from "@/components/ChatWidget";
 import InAppBrowserGuard from "@/components/InAppBrowserGuard";
 
@@ -37,6 +38,7 @@ export default function RootLayout() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <InAppBrowserGuard />
+      <TermsAgreementModal />
       <Header />
       <Outlet />
       <NicknameSetupModal />
