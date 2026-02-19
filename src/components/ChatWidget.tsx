@@ -80,6 +80,39 @@ async function fetchUserProfile(
   return result;
 }
 
+// ── 랭킹 뱃지 컴포넌트 ──
+function RankBadge({ rank }: { rank: number | undefined }) {
+  if (rank == null) return null;
+
+  if (rank === 1) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-400 bg-amber-400/15 px-1.5 py-0.5 rounded-full leading-none">
+        🥇 1위
+      </span>
+    );
+  }
+  if (rank === 2) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-300 bg-slate-300/15 px-1.5 py-0.5 rounded-full leading-none">
+        🥈 2위
+      </span>
+    );
+  }
+  if (rank === 3) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-600/15 px-1.5 py-0.5 rounded-full leading-none">
+        🥉 3위
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center text-[9px] font-medium text-muted-foreground bg-secondary px-1.5 py-0.5 rounded-full leading-none">
+      {rank}위
+    </span>
+  );
+}
+
 // ── 아바타 컴포넌트 ──
 function UserAvatar({
   nickname,
@@ -418,6 +451,7 @@ export default function ChatWidget() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showPositionPicker, setShowPositionPicker] = useState(false);
+  const [userRanks, setUserRanks] = useState<Map<string, number>>(new Map());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -480,6 +514,31 @@ export default function ChatWidget() {
       scrollToBottom(true);
     }
   }, [isOpen, loaded, loadMessages, scrollToBottom]);
+
+  // ── 채팅창 열릴 때 랭킹 데이터 패칭 ──
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchRanks = async () => {
+      const { data, error } = await supabase
+        .from("portfolios")
+        .select("user_id, balance")
+        .order("balance", { ascending: false });
+
+      if (error) {
+        console.error("랭킹 조회 에러:", error.message);
+        return;
+      }
+
+      const rankMap = new Map<string, number>();
+      (data ?? []).forEach((row, idx) => {
+        rankMap.set(row.user_id as string, idx + 1);
+      });
+      setUserRanks(rankMap);
+    };
+
+    fetchRanks();
+  }, [isOpen]);
 
   // ── Supabase Realtime 구독 (INSERT + DELETE) ──
   useEffect(() => {
@@ -725,8 +784,8 @@ export default function ChatWidget() {
                             isMe ? "items-end" : "items-start"
                           }`}
                         >
-                          {/* 닉네임 + 시간 */}
-                          <div className="flex items-center gap-1.5 mb-0.5 px-1">
+                          {/* 닉네임 + 랭킹 뱃지 + 시간 */}
+                          <div className="flex items-center gap-1.5 mb-0.5 px-1 flex-wrap">
                             <span
                               className={`text-[11px] font-medium ${
                                 isMe
@@ -736,6 +795,7 @@ export default function ChatWidget() {
                             >
                               {isMe ? "나" : msg.nickname}
                             </span>
+                            <RankBadge rank={userRanks.get(msg.user_id)} />
                             <span className="text-[10px] text-muted-foreground/60">
                               {formatTime(msg.created_at)}
                             </span>

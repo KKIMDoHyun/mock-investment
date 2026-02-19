@@ -4,12 +4,14 @@ import { indexRoute } from "./routes/index";
 import { loginRoute } from "./routes/login";
 import { adminRoute } from "./routes/admin";
 import { profileRoute } from "./routes/profile";
+import { rankingRoute } from "./routes/ranking";
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   adminRoute,
   profileRoute,
+  rankingRoute,
 ]);
 
 export const router = createRouter({ routeTree });

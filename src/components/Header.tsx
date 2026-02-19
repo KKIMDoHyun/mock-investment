@@ -1,5 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { LogOut, User, ChevronDown, Shield, UserCog } from "lucide-react";
+import {
+  LogOut,
+  User,
+  ChevronDown,
+  Shield,
+  UserCog,
+  Trophy,
+} from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/ui/button";
 import {
@@ -105,6 +112,12 @@ export default function Header() {
                   <Link to="/profile" className="cursor-pointer">
                     <UserCog className="mr-2 h-4 w-4" />
                     <span>내 정보 설정</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/ranking" className="cursor-pointer">
+                    <Trophy className="mr-2 h-4 w-4" />
+                    <span>랭킹 보기</span>
                   </Link>
                 </DropdownMenuItem>
                 {role === "admin" && (
