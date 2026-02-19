@@ -86,12 +86,14 @@ export default function TradingPanel() {
   const positionSize = marginValue * leverage;
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
+    <div className="bg-card border border-border rounded-xl p-3 sm:p-5 flex flex-col gap-3 sm:gap-4">
       {/* ── 잔고 + 출석체크 ── */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-muted-foreground mb-0.5">잔고 (USDT)</p>
-          <p className="text-lg font-bold text-foreground tabular-nums">
+          <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">
+            잔고 (USDT)
+          </p>
+          <p className="text-base sm:text-lg font-bold text-foreground tabular-nums">
             $
             {balance.toLocaleString(undefined, {
               minimumFractionDigits: 2,
@@ -102,9 +104,9 @@ export default function TradingPanel() {
         {user && (
           <button
             onClick={handleAttendance}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 rounded-lg transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 rounded-lg transition-colors cursor-pointer"
           >
-            <Gift className="h-3.5 w-3.5" />
+            <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             보상 받기
           </button>
         )}
@@ -115,12 +117,14 @@ export default function TradingPanel() {
       {/* ── 현재가 ── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 text-xs font-bold">
+          <div className="w-6 h-6 sm:w-7 sm:h-7 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 text-[10px] sm:text-xs font-bold">
             ₿
           </div>
-          <span className="text-sm font-medium text-foreground">BTC/USDT</span>
+          <span className="text-xs sm:text-sm font-medium text-foreground">
+            BTC/USDT
+          </span>
         </div>
-        <p className="text-sm font-semibold text-foreground tabular-nums">
+        <p className="text-xs sm:text-sm font-semibold text-foreground tabular-nums">
           {currentPrice > 0
             ? `$${currentPrice.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
@@ -133,8 +137,12 @@ export default function TradingPanel() {
       {/* ── 레버리지 슬라이더 ── */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label className="text-xs text-muted-foreground">레버리지</label>
-          <span className="text-sm font-bold text-indigo-400">{leverage}x</span>
+          <label className="text-[10px] sm:text-xs text-muted-foreground">
+            레버리지
+          </label>
+          <span className="text-xs sm:text-sm font-bold text-indigo-400">
+            {leverage}x
+          </span>
         </div>
         <input
           type="range"
@@ -143,7 +151,7 @@ export default function TradingPanel() {
           value={leverage}
           onChange={(e) => setLeverage(Number(e.target.value))}
           className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-indigo-500
-            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-indigo-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md"
+            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-indigo-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md"
         />
         {/* 프리셋 버튼 */}
         <div className="flex gap-1 mt-2 flex-wrap">
@@ -151,7 +159,7 @@ export default function TradingPanel() {
             <button
               key={lev}
               onClick={() => setLeverage(lev)}
-              className={`text-[10px] px-2 py-0.5 rounded transition-colors cursor-pointer ${
+              className={`text-[10px] px-1.5 sm:px-2 py-0.5 rounded transition-colors cursor-pointer ${
                 leverage === lev
                   ? "bg-indigo-500/20 text-indigo-400 ring-1 ring-indigo-500/40"
                   : "bg-secondary text-muted-foreground hover:text-foreground"
@@ -165,7 +173,7 @@ export default function TradingPanel() {
 
       {/* ── 주문 금액 ── */}
       <div>
-        <label className="text-xs text-muted-foreground mb-1.5 block">
+        <label className="text-[10px] sm:text-xs text-muted-foreground mb-1.5 block">
           증거금 (USDT)
         </label>
         <div className="relative">
@@ -198,7 +206,7 @@ export default function TradingPanel() {
 
       {/* ── 포지션 사이즈 미리보기 ── */}
       {marginValue > 0 && (
-        <div className="bg-secondary/60 rounded-lg px-3 py-2 text-xs text-muted-foreground space-y-1">
+        <div className="bg-secondary/60 rounded-lg px-3 py-2 text-[11px] sm:text-xs text-muted-foreground space-y-1">
           <div className="flex justify-between">
             <span>포지션 사이즈</span>
             <span className="text-foreground font-medium tabular-nums">
@@ -244,7 +252,7 @@ export default function TradingPanel() {
         <Button
           onClick={() => handleTrade("LONG")}
           disabled={submitting}
-          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
+          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 h-10 sm:h-9"
         >
           <TrendingUp className="h-4 w-4" />
           Long
@@ -252,7 +260,7 @@ export default function TradingPanel() {
         <Button
           onClick={() => handleTrade("SHORT")}
           disabled={submitting}
-          className="flex-1 bg-red-600 hover:bg-red-500 text-white disabled:opacity-50"
+          className="flex-1 bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 h-10 sm:h-9"
         >
           <TrendingDown className="h-4 w-4" />
           Short

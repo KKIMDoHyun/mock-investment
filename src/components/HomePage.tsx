@@ -14,7 +14,7 @@ function PriceDisplay() {
   const currentPrice = useTradingStore((s) => s.currentPrice);
 
   return (
-    <p className="text-lg font-bold text-foreground tabular-nums leading-tight">
+    <p className="text-base sm:text-lg font-bold text-foreground tabular-nums leading-tight">
       {currentPrice > 0
         ? `$${currentPrice.toLocaleString(undefined, {
             minimumFractionDigits: 2,
@@ -47,37 +47,40 @@ export default function HomePage() {
   }, [user?.id, fetchPortfolio, fetchOpenPositions, fetchClosedTrades]);
 
   return (
-    <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4">
+    <main className="flex-1 w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col gap-2 sm:gap-4">
       {/* ── 상단 종목 정보 바 ── */}
-      <div className="flex items-center gap-6 bg-card border border-border rounded-xl px-5 py-3">
+      <div className="flex items-center gap-3 sm:gap-6 bg-card border border-border rounded-xl px-3 sm:px-5 py-2.5 sm:py-3">
         {/* 심볼 */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 text-sm font-bold">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 text-xs sm:text-sm font-bold">
             ₿
           </div>
           <div>
-            <h2 className="text-base font-bold text-foreground leading-tight">
+            <h2 className="text-sm sm:text-base font-bold text-foreground leading-tight">
               BTC/USDT
             </h2>
-            <p className="text-xs text-muted-foreground">바이낸스 · 선물</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              바이낸스 · 선물
+            </p>
           </div>
         </div>
 
         {/* 구분선 */}
-        <div className="h-8 w-px bg-border" />
+        <div className="h-7 sm:h-8 w-px bg-border" />
 
         {/* 현재가 — 독립 컴포넌트 */}
         <div>
-          <p className="text-xs text-muted-foreground mb-0.5">현재가</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">
+            현재가
+          </p>
           <PriceDisplay />
         </div>
-
       </div>
 
       {/* ── 차트 + 주문 패널 ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 flex-1">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-2 sm:gap-4 flex-1">
         {/* 차트 */}
-        <div className="bg-card border border-border rounded-xl overflow-hidden min-h-[500px]">
+        <div className="bg-card border border-border rounded-xl overflow-hidden min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
           <TradingChart />
         </div>
 

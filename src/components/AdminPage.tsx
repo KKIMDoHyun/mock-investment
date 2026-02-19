@@ -41,6 +41,81 @@ function toNum(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// ── 유저 카드 (모바일용) ──
+function UserCard({
+  user,
+  grantInput,
+  onGrantInputChange,
+  onGrant,
+  granting,
+}: {
+  user: UserRow;
+  grantInput: string;
+  onGrantInputChange: (value: string) => void;
+  onGrant: () => void;
+  granting: boolean;
+}) {
+  return (
+    <div className="border-b border-border/50 px-4 py-3 space-y-2.5">
+      {/* 상단: 이메일 + 역할 */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-foreground truncate">
+            {user.email}
+          </p>
+          <p className="text-xs text-muted-foreground truncate">
+            {user.nickname || "—"}
+          </p>
+        </div>
+        <span
+          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+            user.role === "admin"
+              ? "bg-indigo-500/15 text-indigo-400"
+              : "bg-secondary text-muted-foreground"
+          }`}
+        >
+          {user.role}
+        </span>
+      </div>
+
+      {/* 자산 */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">현재 자산</span>
+        <span className="text-sm font-bold text-foreground tabular-nums">
+          $
+          {user.balance.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+        </span>
+      </div>
+
+      {/* 자산 지급 */}
+      <div className="flex items-center gap-2">
+        <Input
+          type="text"
+          placeholder="금액 (USDT)"
+          value={grantInput}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            onGrantInputChange(e.target.value.replace(/[^0-9.]/g, ""))
+          }
+          className="h-8 flex-1 text-sm tabular-nums"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onGrant}
+          disabled={granting}
+          className="h-8 gap-1.5 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 shrink-0"
+        >
+          <Send className="h-3.5 w-3.5" />
+          지급
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
@@ -139,7 +214,6 @@ export default function AdminPage() {
 
   // ── 검색 + 정렬 적용된 유저 목록 ──
   const filteredAndSortedUsers = useMemo(() => {
-    // 1) 검색 필터
     const query = searchQuery.trim().toLowerCase();
     let filtered = users;
     if (query) {
@@ -150,7 +224,6 @@ export default function AdminPage() {
       );
     }
 
-    // 2) admin / user 분리 → admin은 맨 위 고정, user만 정렬
     const admins = filtered.filter((u) => u.role === "admin");
     const nonAdmins = filtered.filter((u) => u.role !== "admin");
 
@@ -167,7 +240,7 @@ export default function AdminPage() {
       return sortDir === "desc" ? -cmp : cmp;
     };
 
-    admins.sort((a, b) => a.email.localeCompare(b.email)); // admin은 항상 이메일순
+    admins.sort((a, b) => a.email.localeCompare(b.email));
     nonAdmins.sort(compareFn);
 
     return [...admins, ...nonAdmins];
@@ -261,18 +334,18 @@ export default function AdminPage() {
   if (role !== "admin") return null;
 
   return (
-    <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+    <main className="flex-1 w-full px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
       {/* ── 헤더 ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center">
-            <Shield className="h-5 w-5 text-indigo-400" />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center shrink-0">
+            <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-400" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-bold text-foreground">
               관리자 대시보드
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
               {user?.email} · 관리자
             </p>
           </div>
@@ -283,16 +356,16 @@ export default function AdminPage() {
           size="sm"
           onClick={fetchUsers}
           disabled={loading}
-          className="gap-2"
+          className="gap-1.5 sm:gap-2 shrink-0"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          새로고침
+          <span className="hidden sm:inline">새로고침</span>
         </Button>
       </div>
 
       {/* ── 통계 요약 ── */}
       {!loading && users.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
           <StatCard label="총 유저" value={`${users.length}명`} />
           <StatCard
             label="관리자"
@@ -318,8 +391,8 @@ export default function AdminPage() {
       )}
 
       {/* ── 검색 바 + 건수 ── */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative max-w-sm flex-1">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
+        <div className="relative w-full sm:max-w-sm sm:flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
@@ -332,7 +405,7 @@ export default function AdminPage() {
           />
         </div>
         {!loading && users.length > 0 && (
-          <p className="text-sm text-muted-foreground whitespace-nowrap">
+          <p className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
             {searchQuery
               ? `${filteredAndSortedUsers.length}명 검색됨 / 전체 ${users.length}명`
               : `전체 ${users.length}명`}
@@ -340,122 +413,172 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* ── 유저 테이블 ── */}
+      {/* ── 유저 테이블 (데스크탑) / 카드 리스트 (모바일) ── */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[240px]">
-                <button
-                  type="button"
-                  onClick={() => handleSort("email")}
-                  className="flex items-center gap-1.5 hover:text-foreground transition-colors"
-                >
-                  이메일
-                  {renderSortIcon("email")}
-                </button>
-              </TableHead>
-              <TableHead className="w-[140px]">별명</TableHead>
-              <TableHead className="w-[100px]">역할</TableHead>
-              <TableHead className="w-[160px]">
-                <button
-                  type="button"
-                  onClick={() => handleSort("balance")}
-                  className="flex items-center gap-1.5 ml-auto hover:text-foreground transition-colors"
-                >
-                  현재 자산
-                  {renderSortIcon("balance")}
-                </button>
-              </TableHead>
-              <TableHead className="w-[280px]">자산 지급</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
+        {/* 데스크탑: 테이블 */}
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-12">
-                  <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    불러오는 중...
-                  </div>
-                </TableCell>
+                <TableHead className="w-[240px]">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("email")}
+                    className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+                  >
+                    이메일
+                    {renderSortIcon("email")}
+                  </button>
+                </TableHead>
+                <TableHead className="w-[140px]">별명</TableHead>
+                <TableHead className="w-[100px]">역할</TableHead>
+                <TableHead className="w-[160px]">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("balance")}
+                    className="flex items-center gap-1.5 ml-auto hover:text-foreground transition-colors"
+                  >
+                    현재 자산
+                    {renderSortIcon("balance")}
+                  </button>
+                </TableHead>
+                <TableHead className="w-[280px]">자산 지급</TableHead>
               </TableRow>
-            ) : filteredAndSortedUsers.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="text-center py-12 text-muted-foreground"
-                >
-                  {searchQuery
-                    ? `"${searchQuery}" 검색 결과가 없습니다.`
-                    : "가입된 유저가 없습니다."}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredAndSortedUsers.map((u) => (
-                <TableRow key={u.id}>
-                  {/* 이메일 */}
-                  <TableCell className="font-medium">{u.email}</TableCell>
-
-                  {/* 별명 */}
-                  <TableCell className="text-muted-foreground">
-                    {u.nickname || "—"}
-                  </TableCell>
-
-                  {/* 역할 */}
-                  <TableCell>
-                    <span
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        u.role === "admin"
-                          ? "bg-indigo-500/15 text-indigo-400"
-                          : "bg-secondary text-muted-foreground"
-                      }`}
-                    >
-                      {u.role}
-                    </span>
-                  </TableCell>
-
-                  {/* 현재 자산 */}
-                  <TableCell className="text-right tabular-nums font-semibold">
-                    $
-                    {u.balance.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </TableCell>
-
-                  {/* 자산 지급 */}
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="text"
-                        placeholder="금액 (USDT)"
-                        value={grantInputs[u.id] ?? ""}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setGrantInputs((prev) => ({
-                            ...prev,
-                            [u.id]: e.target.value.replace(/[^0-9.]/g, ""),
-                          }))
-                        }
-                        className="h-8 w-32 text-sm tabular-nums"
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleGrant(u.id)}
-                        disabled={granting[u.id]}
-                        className="h-8 gap-1.5 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
-                      >
-                        <Send className="h-3.5 w-3.5" />
-                        지급
-                      </Button>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-12">
+                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      불러오는 중...
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : filteredAndSortedUsers.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-12 text-muted-foreground"
+                  >
+                    {searchQuery
+                      ? `"${searchQuery}" 검색 결과가 없습니다.`
+                      : "가입된 유저가 없습니다."}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredAndSortedUsers.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.email}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {u.nickname || "—"}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          u.role === "admin"
+                            ? "bg-indigo-500/15 text-indigo-400"
+                            : "bg-secondary text-muted-foreground"
+                        }`}
+                      >
+                        {u.role}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">
+                      $
+                      {u.balance.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          placeholder="금액 (USDT)"
+                          value={grantInputs[u.id] ?? ""}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setGrantInputs((prev) => ({
+                              ...prev,
+                              [u.id]: e.target.value.replace(/[^0-9.]/g, ""),
+                            }))
+                          }
+                          className="h-8 w-32 text-sm tabular-nums"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleGrant(u.id)}
+                          disabled={granting[u.id]}
+                          className="h-8 gap-1.5 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          지급
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* 모바일: 카드 리스트 */}
+        <div className="md:hidden">
+          {/* 모바일 정렬 버튼 */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
+            <span className="text-xs text-muted-foreground">정렬:</span>
+            <button
+              type="button"
+              onClick={() => handleSort("email")}
+              className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
+                sortKey === "email"
+                  ? "bg-indigo-500/20 text-indigo-400"
+                  : "bg-secondary text-muted-foreground"
+              }`}
+            >
+              이메일 {sortKey === "email" && (sortDir === "asc" ? "↑" : "↓")}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSort("balance")}
+              className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
+                sortKey === "balance"
+                  ? "bg-indigo-500/20 text-indigo-400"
+                  : "bg-secondary text-muted-foreground"
+              }`}
+            >
+              자산 {sortKey === "balance" && (sortDir === "asc" ? "↑" : "↓")}
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              불러오는 중...
+            </div>
+          ) : filteredAndSortedUsers.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              {searchQuery
+                ? `"${searchQuery}" 검색 결과가 없습니다.`
+                : "가입된 유저가 없습니다."}
+            </div>
+          ) : (
+            filteredAndSortedUsers.map((u) => (
+              <UserCard
+                key={u.id}
+                user={u}
+                grantInput={grantInputs[u.id] ?? ""}
+                onGrantInputChange={(value) =>
+                  setGrantInputs((prev) => ({ ...prev, [u.id]: value }))
+                }
+                onGrant={() => handleGrant(u.id)}
+                granting={granting[u.id] ?? false}
+              />
+            ))
+          )}
+        </div>
       </div>
     </main>
   );
@@ -463,9 +586,13 @@ export default function AdminPage() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-card border border-border rounded-xl px-4 py-3">
-      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-      <p className="text-lg font-bold text-foreground tabular-nums">{value}</p>
+    <div className="bg-card border border-border rounded-xl px-3 sm:px-4 py-2.5 sm:py-3">
+      <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">
+        {label}
+      </p>
+      <p className="text-sm sm:text-lg font-bold text-foreground tabular-nums">
+        {value}
+      </p>
     </div>
   );
 }

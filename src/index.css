@@ -13,11 +13,11 @@
   --color-popover-foreground: oklch(0.96 0 0);
   --color-primary: oklch(0.96 0 0);
   --color-primary-foreground: oklch(0.205 0 0);
-  --color-secondary: oklch(0.30 0 0);
+  --color-secondary: oklch(0.3 0 0);
   --color-secondary-foreground: oklch(0.96 0 0);
-  --color-muted: oklch(0.30 0 0);
+  --color-muted: oklch(0.3 0 0);
   --color-muted-foreground: oklch(0.65 0 0);
-  --color-accent: oklch(0.30 0 0);
+  --color-accent: oklch(0.3 0 0);
   --color-accent-foreground: oklch(0.96 0 0);
   --color-destructive: oklch(0.396 0.141 25.723);
   --color-destructive-foreground: oklch(0.637 0.237 25.331);
@@ -31,8 +31,59 @@
   --radius-xl: 0.75rem;
 }
 
+/* ── 기본 body 세팅 ── */
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent; /* 모바일 탭 하이라이트 제거 */
+  -webkit-text-size-adjust: 100%; /* iOS 텍스트 크기 자동 조절 방지 */
+}
+
+/* ── 모바일 safe area 대응 (노치, 하단 바) ── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ── 모바일 스크롤 부드럽게 ── */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 모바일에서 input focus 시 zoom 방지 (16px 이상이면 자동 zoom 안 됨) ── */
+@media screen and (max-width: 767px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* ── 스크롤바 얇게 (데스크탑) ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.35 0 0);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.45 0 0);
+}
+
+/* ── 스크롤바 숨기기 (타임프레임 셀렉터 등) ── */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }

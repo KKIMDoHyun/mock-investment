@@ -213,12 +213,12 @@ export default function TradingChart() {
   return (
     <div className="flex flex-col w-full h-full">
       {/* ── 타임프레임 셀렉터 ── */}
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-border overflow-x-auto shrink-0">
+      <div className="flex items-center gap-0.5 sm:gap-1 px-2 sm:px-3 py-1.5 sm:py-2 border-b border-border overflow-x-auto shrink-0 scrollbar-none">
         {TIMEFRAMES.map((tf) => (
           <button
             key={tf.value}
             onClick={() => setTimeframe(tf.value)}
-            className={`px-2.5 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap cursor-pointer ${
+            className={`px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium rounded transition-colors whitespace-nowrap cursor-pointer ${
               timeframe === tf.value
                 ? "bg-indigo-500/20 text-indigo-400 ring-1 ring-indigo-500/40"
                 : "text-muted-foreground hover:text-foreground hover:bg-accent"

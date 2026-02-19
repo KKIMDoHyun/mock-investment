@@ -15,18 +15,22 @@ export default function Header() {
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
   const nickname = useAuthStore((s) => s.nickname);
+  const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const signOut = useAuthStore((s) => s.signOut);
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
+      <div className="w-full px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-12 sm:h-14">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 no-underline">
-            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+          <Link
+            to="/"
+            className="flex items-center gap-2 sm:gap-2.5 no-underline"
+          >
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
               <svg
-                className="w-4 h-4 text-white"
+                className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white"
                 fill="none"
                 viewBox="0 0 24 24"
                 strokeWidth={2}
@@ -39,7 +43,7 @@ export default function Header() {
                 />
               </svg>
             </div>
-            <span className="text-lg font-semibold text-foreground">
+            <span className="text-base sm:text-lg font-semibold text-foreground">
               Crypto Mock
             </span>
           </Link>
@@ -49,25 +53,51 @@ export default function Header() {
             /* 로그인 상태: 유저 드롭다운 */
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="gap-2">
-                  <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-xs font-medium text-white">
-                    {(nickname ?? user.email)?.charAt(0).toUpperCase()}
-                  </div>
+                <Button
+                  variant="ghost"
+                  className="gap-1.5 sm:gap-2 px-2 sm:px-3"
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt={nickname ?? ""}
+                      className="w-7 h-7 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-xs font-medium text-white">
+                      {(nickname ?? user.email)?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <span className="hidden sm:inline text-sm text-muted-foreground max-w-[160px] truncate">
                     {nickname ?? user.email}
                   </span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  <ChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">
-                      {nickname ?? "닉네임 없음"}
-                    </p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {user.email}
-                    </p>
+                  <div className="flex items-center gap-2.5">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={nickname ?? ""}
+                        className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-sm font-medium text-white flex-shrink-0">
+                        {(nickname ?? user.email)?.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex flex-col space-y-1 min-w-0">
+                      <p className="text-sm font-medium leading-none truncate">
+                        {nickname ?? "닉네임 없음"}
+                      </p>
+                      <p className="text-xs leading-none text-muted-foreground truncate">
+                        {user.email}
+                      </p>
+                    </div>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -96,9 +126,13 @@ export default function Header() {
             /* 비로그인 상태: 로그인 드롭다운 */
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 sm:gap-2"
+                >
                   <User className="h-4 w-4" />
-                  로그인
+                  <span className="hidden xs:inline">로그인</span>
                   <ChevronDown className="h-3 w-3" />
                 </Button>
               </DropdownMenuTrigger>

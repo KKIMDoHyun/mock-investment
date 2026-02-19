@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/authStore";
 import Header from "@/components/Header";
 import NicknameSetupModal from "@/components/NicknameSetupModal";
 import ChatWidget from "@/components/ChatWidget";
+import InAppBrowserGuard from "@/components/InAppBrowserGuard";
 
 export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
@@ -28,6 +29,7 @@ export default function RootLayout() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <InAppBrowserGuard />
       <Header />
       <Outlet />
       <NicknameSetupModal />
