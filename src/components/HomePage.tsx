@@ -1,10 +1,50 @@
+import { useEffect } from "react";
 import TradingChart from "@/components/TradingChart";
 import TradingPanel from "@/components/TradingPanel";
 import PositionsPanel from "@/components/PositionsPanel";
-import { useTradingStore } from "@/store/tradingStore";
+import {
+  useTradingStore,
+  startPriceStream,
+  stopPriceStream,
+} from "@/store/tradingStore";
+import { useAuthStore } from "@/store/authStore";
+
+// ── 현재가 표시 (독립 컴포넌트로 분리 → 가격 변동 시 이것만 리렌더) ──
+function PriceDisplay() {
+  const currentPrice = useTradingStore((s) => s.currentPrice);
+
+  return (
+    <p className="text-lg font-bold text-foreground tabular-nums leading-tight">
+      {currentPrice > 0
+        ? `$${currentPrice.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`
+        : "불러오는 중..."}
+    </p>
+  );
+}
 
 export default function HomePage() {
-  const currentPrice = useTradingStore((s) => s.currentPrice);
+  const user = useAuthStore((s) => s.user);
+  const fetchPortfolio = useTradingStore((s) => s.fetchPortfolio);
+  const fetchOpenPositions = useTradingStore((s) => s.fetchOpenPositions);
+  const fetchClosedTrades = useTradingStore((s) => s.fetchClosedTrades);
+
+  // 가격 스트림 시작/중지 (모듈 레벨 WebSocket)
+  useEffect(() => {
+    startPriceStream();
+    return () => stopPriceStream();
+  }, []);
+
+  // 유저 데이터 로드
+  useEffect(() => {
+    if (user?.id) {
+      fetchPortfolio(user.id);
+      fetchOpenPositions(user.id);
+      fetchClosedTrades(user.id);
+    }
+  }, [user?.id, fetchPortfolio, fetchOpenPositions, fetchClosedTrades]);
 
   return (
     <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4">
@@ -26,17 +66,10 @@ export default function HomePage() {
         {/* 구분선 */}
         <div className="h-8 w-px bg-border" />
 
-        {/* 현재가 */}
+        {/* 현재가 — 독립 컴포넌트 */}
         <div>
           <p className="text-xs text-muted-foreground mb-0.5">현재가</p>
-          <p className="text-lg font-bold text-foreground tabular-nums leading-tight">
-            {currentPrice > 0
-              ? `$${currentPrice.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}`
-              : "—"}
-          </p>
+          <PriceDisplay />
         </div>
 
         {/* 구분선 */}
@@ -89,7 +122,7 @@ export default function HomePage() {
         <TradingPanel />
       </div>
 
-      {/* ── 하단: 포지션 / 주문 / 내역 ── */}
+      {/* ── 하단: 포지션 / 거래 내역 ── */}
       <PositionsPanel />
     </main>
   );

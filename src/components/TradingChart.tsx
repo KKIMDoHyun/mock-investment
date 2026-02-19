@@ -1,18 +1,13 @@
 import { useEffect, useRef } from "react";
-import { useTradingStore } from "@/store/tradingStore";
-
-/** 바이낸스 선물 WebSocket — 현재가 업데이트 전용 */
-const BINANCE_PRICE_WS = "wss://fstream.binance.com/ws/btcusdt@kline_1m";
 
 export default function TradingChart() {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ── 1) TradingView Advanced Chart 위젯 ──
+  // ── TradingView Advanced Chart 위젯 ──
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // 위젯 내부 구조 생성
     const widgetDiv = document.createElement("div");
     widgetDiv.className = "tradingview-widget-container__widget";
     widgetDiv.style.height = "100%";
@@ -25,7 +20,7 @@ export default function TradingChart() {
     script.async = true;
     script.textContent = JSON.stringify({
       autosize: true,
-      symbol: "BINANCE:BTCUSDT",
+      symbol: "BINANCE:BTCUSDTPERP",
       interval: "1",
       timezone: "Asia/Seoul",
       theme: "dark",
@@ -44,22 +39,6 @@ export default function TradingChart() {
 
     return () => {
       container.innerHTML = "";
-    };
-  }, []);
-
-  // ── 2) 바이낸스 WebSocket — 현재가만 별도 수신 ──
-  useEffect(() => {
-    const ws = new WebSocket(BINANCE_PRICE_WS);
-
-    ws.onmessage = (event: MessageEvent) => {
-      const msg = JSON.parse(event.data as string) as {
-        k: { c: string };
-      };
-      useTradingStore.getState().setCurrentPrice(parseFloat(msg.k.c));
-    };
-
-    return () => {
-      ws.close();
     };
   }, []);
 

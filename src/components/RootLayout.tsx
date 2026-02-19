@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Outlet } from "@tanstack/react-router";
+import { Toaster } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import Header from "@/components/Header";
 
@@ -27,6 +28,17 @@ export default function RootLayout() {
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
       <Outlet />
+      <Toaster
+        theme="dark"
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: "var(--color-card)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-foreground)",
+          },
+        }}
+      />
     </div>
   );
 }
