@@ -2,10 +2,16 @@ import { create } from "zustand";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
+type Role = "user" | "admin";
+
 interface AuthState {
   session: Session | null;
   user: User | null;
+  role: Role;
+  /** 인증 초기화 로딩 (세션 복원) */
   loading: boolean;
+  /** role 정보 로딩 완료 여부 */
+  roleLoaded: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   initialize: () => () => void;
@@ -29,10 +35,30 @@ async function upsertProfile(user: User) {
   }
 }
 
+/**
+ * profiles 테이블에서 해당 유저의 role을 가져옵니다.
+ */
+async function fetchRole(userId: string): Promise<Role> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+
+  if (error) {
+    console.error("role 조회 에러:", error.message);
+    return "user"; // 기본값
+  }
+
+  return (data?.role as Role) ?? "user";
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   user: null,
+  role: "user",
   loading: true,
+  roleLoaded: false,
 
   signInWithGoogle: async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -49,25 +75,41 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (error) {
       console.error("로그아웃 에러:", error.message);
     }
+    set({ role: "user", roleLoaded: true });
   },
 
-  /**
-   * Supabase는 기본적으로 localStorage에 access_token과 refresh_token을 저장합니다.
-   * getSession()이 페이지 새로고침 시 localStorage에서 토큰을 읽어 세션을 복원하고,
-   * 만료된 토큰은 자동으로 refresh합니다.
-   * onAuthStateChange를 구독하여 실시간 auth 상태 변경을 감지합니다.
-   */
   initialize: () => {
     // 현재 세션을 즉시 가져옴 (localStorage에서 토큰 복원)
     supabase.auth.getSession().then(({ data: { session } }) => {
-      set({ session, user: session?.user ?? null, loading: false });
+      const user = session?.user ?? null;
+
+      // 로딩 즉시 해제 (UI 렌더링 차단 방지)
+      set({ session, user, loading: false });
+
+      // role은 비동기로 가져온 뒤 roleLoaded 플래그 설정
+      if (user) {
+        fetchRole(user.id).then((role) => set({ role, roleLoaded: true }));
+      } else {
+        set({ role: "user", roleLoaded: true });
+      }
     });
 
-    // auth 상태 변경 구독
+    // auth 상태 변경 구독 (동기 콜백)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      set({ session, user: session?.user ?? null, loading: false });
+      const user = session?.user ?? null;
+
+      // 로딩 즉시 해제
+      set({ session, user, loading: false });
+
+      // role 비동기 fetch
+      if (user) {
+        set({ roleLoaded: false });
+        fetchRole(user.id).then((role) => set({ role, roleLoaded: true }));
+      } else {
+        set({ role: "user", roleLoaded: true });
+      }
 
       // 로그인 성공 시 profiles 테이블에 유저 정보 upsert
       if (event === "SIGNED_IN" && session?.user) {

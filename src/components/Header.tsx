@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { LogOut, User, ChevronDown } from "lucide-react";
+import { LogOut, User, ChevronDown, Shield } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
 
 export default function Header() {
   const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const signOut = useAuthStore((s) => s.signOut);
 
@@ -67,6 +68,14 @@ export default function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {role === "admin" && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin" className="cursor-pointer">
+                      <Shield className="mr-2 h-4 w-4" />
+                      <span>관리자 대시보드</span>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={signOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>로그아웃</span>
