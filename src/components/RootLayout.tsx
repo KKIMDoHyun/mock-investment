@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { useAuthStore } from "@/store/authStore";
+import { startPriceStream, stopPriceStream } from "@/store/tradingStore";
 import Header from "@/components/Header";
 import NicknameSetupModal from "@/components/NicknameSetupModal";
 import ChatWidget from "@/components/ChatWidget";
@@ -15,6 +16,12 @@ export default function RootLayout() {
     const cleanup = initialize();
     return cleanup;
   }, [initialize]);
+
+  // 바이낸스 실시간 가격 스트림 (전역 — 모든 페이지에서 동작)
+  useEffect(() => {
+    startPriceStream();
+    return () => stopPriceStream();
+  }, []);
 
   if (loading) {
     return (

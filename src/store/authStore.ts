@@ -197,16 +197,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     // 파일 유효성 검사
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "image/gif",
-    ];
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       return {
         success: false,
-        message: "JPG, PNG, WebP, GIF 형식만 지원합니다.",
+        message: "JPG, PNG, WebP 형식만 지원합니다.",
       };
     }
     if (file.size > 2 * 1024 * 1024) {

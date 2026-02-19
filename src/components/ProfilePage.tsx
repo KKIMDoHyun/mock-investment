@@ -149,7 +149,7 @@ export default function ProfilePage() {
               {uploadingAvatar ? "업로드 중..." : "이미지 변경"}
             </button>
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              JPG, PNG, WebP, GIF · 최대 2MB
+              JPG, PNG, WebP · 최대 2MB
             </p>
           </div>
 
@@ -157,7 +157,7 @@ export default function ProfilePage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
+            accept="image/jpeg,image/png,image/webp"
             onChange={handleFileChange}
             className="hidden"
           />

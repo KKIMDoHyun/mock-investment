@@ -5,6 +5,7 @@ import {
   SendHorizontal,
   TrendingUp,
   ChevronUp,
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
@@ -307,12 +308,14 @@ export default function ChatWidget() {
   const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const positions = useTradingStore((s) => s.positions);
   const currentPrice = useTradingStore((s) => s.currentPrice);
+  const fetchOpenPositions = useTradingStore((s) => s.fetchOpenPositions);
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showPositionPicker, setShowPositionPicker] = useState(false);
 
@@ -330,6 +333,8 @@ export default function ChatWidget() {
 
   // ── 초기 메시지 로드 (최근 50개) ──
   const loadMessages = useCallback(async () => {
+    setLoadingMessages(true);
+
     const { data, error } = await supabase
       .from("messages")
       .select("id, user_id, content, created_at")
@@ -338,6 +343,7 @@ export default function ChatWidget() {
 
     if (error) {
       console.error("메시지 로드 에러:", error.message);
+      setLoadingMessages(false);
       return;
     }
 
@@ -359,6 +365,7 @@ export default function ChatWidget() {
 
     setMessages(enriched);
     setLoaded(true);
+    setLoadingMessages(false);
   }, []);
 
   // ── 채팅창 열릴 때 로드 ──
@@ -374,7 +381,7 @@ export default function ChatWidget() {
     }
   }, [isOpen, loaded, loadMessages, scrollToBottom]);
 
-  // ── Supabase Realtime 구독 ──
+  // ── Supabase Realtime 구독 (INSERT + DELETE) ──
   useEffect(() => {
     const channel = supabase
       .channel("public:messages")
@@ -401,6 +408,14 @@ export default function ChatWidget() {
           };
 
           setMessages((prev) => [...prev, newMsg]);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "messages" },
+        (payload) => {
+          const deletedId = (payload.old as { id: string }).id;
+          setMessages((prev) => prev.filter((msg) => msg.id !== deletedId));
         }
       )
       .subscribe();
@@ -549,7 +564,14 @@ export default function ChatWidget() {
             ref={scrollContainerRef}
             className="flex-1 overflow-y-auto px-3 py-3 space-y-3"
           >
-            {messages.length === 0 ? (
+            {loadingMessages ? (
+              <div className="flex flex-col items-center justify-center h-full gap-2">
+                <Loader2 className="h-6 w-6 text-indigo-400 animate-spin" />
+                <p className="text-xs text-muted-foreground">
+                  메시지를 불러오는 중...
+                </p>
+              </div>
+            ) : messages.length === 0 ? (
               <div className="flex items-center justify-center h-full">
                 <p className="text-xs text-muted-foreground">
                   아직 메시지가 없습니다. 첫 메시지를 보내보세요!
@@ -630,7 +652,14 @@ export default function ChatWidget() {
                 {/* 포지션 자랑 버튼 */}
                 <button
                   type="button"
-                  onClick={() => setShowPositionPicker((prev) => !prev)}
+                  onClick={() => {
+                    const willOpen = !showPositionPicker;
+                    setShowPositionPicker(willOpen);
+                    // 포지션 패널을 열 때 최신 포지션을 가져옴 (다른 페이지에서도 동작하도록)
+                    if (willOpen && user?.id) {
+                      fetchOpenPositions(user.id);
+                    }
+                  }}
                   title="포지션 자랑하기"
                   className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors ${
                     showPositionPicker

@@ -60,12 +60,22 @@ const fmtDateShort = (iso: string | null) => {
   });
 };
 
+// ── 스켈레톤 (가격 로딩 중 플레이스홀더) ──
+function PriceSkeleton({ className }: { className?: string }) {
+  return (
+    <span
+      className={`inline-block h-4 w-16 rounded bg-muted-foreground/20 animate-pulse ${className ?? ""}`}
+    />
+  );
+}
+
 // ── 개별 OPEN 포지션 행 (데스크탑 테이블용) ──
 function PositionRow({ trade }: { trade: Trade }) {
   const currentPrice = useTradingStore((s) => s.currentPrice);
   const closePosition = useTradingStore((s) => s.closePosition);
   const [closing, setClosing] = useState(false);
 
+  const priceReady = currentPrice > 0;
   const { pnl, roe, liqPrice } = calcPnl(trade, currentPrice);
   const isProfit = pnl >= 0;
 
@@ -114,34 +124,39 @@ function PositionRow({ trade }: { trade: Trade }) {
 
       {/* 현재가 */}
       <td className="py-2.5 px-3 text-right tabular-nums text-sm text-foreground">
-        ${fmtUsd(currentPrice)}
+        {priceReady ? `$${fmtUsd(currentPrice)}` : <PriceSkeleton />}
       </td>
 
       {/* 청산가 */}
       <td className="py-2.5 px-3 text-right tabular-nums text-sm text-yellow-400">
-        ${fmtUsd(liqPrice)}
+        {priceReady ? `$${fmtUsd(liqPrice)}` : <PriceSkeleton />}
       </td>
 
       {/* 미실현 손익 */}
-      <td
-        className={`py-2.5 px-3 text-right tabular-nums text-sm font-semibold ${
-          isProfit ? "text-emerald-400" : "text-red-400"
-        }`}
-      >
-        <div>
-          {isProfit ? "+" : ""}${fmtUsd(pnl)}
-        </div>
-        <div className="text-[10px] font-medium">
-          ({isProfit ? "+" : ""}
-          {roe.toFixed(2)}%)
-        </div>
+      <td className="py-2.5 px-3 text-right tabular-nums text-sm font-semibold">
+        {priceReady ? (
+          <div className={isProfit ? "text-emerald-400" : "text-red-400"}>
+            <div>
+              {isProfit ? "+" : ""}${fmtUsd(pnl)}
+            </div>
+            <div className="text-[10px] font-medium">
+              ({isProfit ? "+" : ""}
+              {roe.toFixed(2)}%)
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-end gap-1">
+            <PriceSkeleton className="w-20" />
+            <PriceSkeleton className="w-12 h-3" />
+          </div>
+        )}
       </td>
 
       {/* 종료 */}
       <td className="py-2.5 px-3 text-center">
         <button
           onClick={handleClose}
-          disabled={closing}
+          disabled={closing || !priceReady}
           className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer disabled:opacity-50"
         >
           <X className="h-3 w-3" />
@@ -158,6 +173,7 @@ function PositionCard({ trade }: { trade: Trade }) {
   const closePosition = useTradingStore((s) => s.closePosition);
   const [closing, setClosing] = useState(false);
 
+  const priceReady = currentPrice > 0;
   const { pnl, roe, liqPrice } = calcPnl(trade, currentPrice);
   const isProfit = pnl >= 0;
 
@@ -194,7 +210,7 @@ function PositionCard({ trade }: { trade: Trade }) {
         </div>
         <button
           onClick={handleClose}
-          disabled={closing}
+          disabled={closing || !priceReady}
           className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer disabled:opacity-50"
         >
           <X className="h-3 w-3" />
@@ -203,19 +219,26 @@ function PositionCard({ trade }: { trade: Trade }) {
       </div>
 
       {/* 수익 */}
-      <div
-        className={`flex items-baseline gap-2 ${
-          isProfit ? "text-emerald-400" : "text-red-400"
-        }`}
-      >
-        <span className="text-base font-bold tabular-nums">
-          {isProfit ? "+" : ""}${fmtUsd(pnl)}
-        </span>
-        <span className="text-xs font-medium tabular-nums">
-          ({isProfit ? "+" : ""}
-          {roe.toFixed(2)}%)
-        </span>
-      </div>
+      {priceReady ? (
+        <div
+          className={`flex items-baseline gap-2 ${
+            isProfit ? "text-emerald-400" : "text-red-400"
+          }`}
+        >
+          <span className="text-base font-bold tabular-nums">
+            {isProfit ? "+" : ""}${fmtUsd(pnl)}
+          </span>
+          <span className="text-xs font-medium tabular-nums">
+            ({isProfit ? "+" : ""}
+            {roe.toFixed(2)}%)
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-baseline gap-2">
+          <PriceSkeleton className="w-24 h-5" />
+          <PriceSkeleton className="w-14 h-4" />
+        </div>
+      )}
 
       {/* 상세 정보 2x2 그리드 */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
@@ -234,13 +257,13 @@ function PositionCard({ trade }: { trade: Trade }) {
         <div className="flex justify-between">
           <span className="text-muted-foreground">현재가</span>
           <span className="text-foreground tabular-nums">
-            ${fmtUsd(currentPrice)}
+            {priceReady ? `$${fmtUsd(currentPrice)}` : <PriceSkeleton className="w-16 h-3.5" />}
           </span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">청산가</span>
           <span className="text-yellow-400 tabular-nums">
-            ${fmtUsd(liqPrice)}
+            {priceReady ? `$${fmtUsd(liqPrice)}` : <PriceSkeleton className="w-16 h-3.5" />}
           </span>
         </div>
       </div>

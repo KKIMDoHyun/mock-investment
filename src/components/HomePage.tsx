@@ -2,11 +2,7 @@ import { useEffect } from "react";
 import TradingChart from "@/components/TradingChart";
 import TradingPanel from "@/components/TradingPanel";
 import PositionsPanel from "@/components/PositionsPanel";
-import {
-  useTradingStore,
-  startPriceStream,
-  stopPriceStream,
-} from "@/store/tradingStore";
+import { useTradingStore } from "@/store/tradingStore";
 import { useAuthStore } from "@/store/authStore";
 
 // ── 현재가 표시 (독립 컴포넌트로 분리 → 가격 변동 시 이것만 리렌더) ──
@@ -30,12 +26,6 @@ export default function HomePage() {
   const fetchPortfolio = useTradingStore((s) => s.fetchPortfolio);
   const fetchOpenPositions = useTradingStore((s) => s.fetchOpenPositions);
   const fetchClosedTrades = useTradingStore((s) => s.fetchClosedTrades);
-
-  // 가격 스트림 시작/중지 (모듈 레벨 WebSocket)
-  useEffect(() => {
-    startPriceStream();
-    return () => stopPriceStream();
-  }, []);
 
   // 유저 데이터 로드
   useEffect(() => {
