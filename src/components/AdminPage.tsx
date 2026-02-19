@@ -261,14 +261,16 @@ export default function AdminPage() {
 
       const { data: portfolio, error: fetchErr } = await supabase
         .from("portfolios")
-        .select("balance")
+        .select("balance, total_principal")
         .eq("user_id", targetUserId)
         .single();
 
       if (fetchErr && fetchErr.code === "PGRST116") {
-        const { error: insertErr } = await supabase
-          .from("portfolios")
-          .insert({ user_id: targetUserId, balance: amount });
+        const { error: insertErr } = await supabase.from("portfolios").insert({
+          user_id: targetUserId,
+          balance: amount,
+          total_principal: amount,
+        });
 
         if (insertErr) {
           toast.error(`지급 실패: ${insertErr.message}`);
@@ -281,11 +283,16 @@ export default function AdminPage() {
         return;
       } else {
         const currentBalance = toNum(portfolio?.balance);
+        const currentPrincipal = toNum(portfolio?.total_principal);
         const newBalance = currentBalance + amount;
+        const newPrincipal = currentPrincipal + amount;
 
         const { error: updateErr } = await supabase
           .from("portfolios")
-          .update({ balance: newBalance })
+          .update({
+            balance: newBalance,
+            total_principal: newPrincipal,
+          })
           .eq("user_id", targetUserId);
 
         if (updateErr) {

@@ -10,7 +10,7 @@ interface RankedUser {
   nickname: string;
   avatarUrl: string | null;
   balance: number;
-  snapshotAssets: number | null;
+  totalPrincipal: number;
   profit: number | null;
   roe: number | null;
 }
@@ -18,8 +18,14 @@ interface RankedUser {
 interface PortfolioRow {
   userId: string;
   balance: number;
+  totalPrincipal: number;
   nickname: string;
   avatarUrl: string | null;
+}
+
+interface SnapshotInfo {
+  totalAssets: number;
+  totalPrincipal: number;
 }
 
 const MAX_RANK = 15;
@@ -152,17 +158,21 @@ function PeriodTabs({
   );
 }
 
+// ── 기본 스냅샷 (데이터 없을 때) ──
+const DEFAULT_ASSETS = 1000000;
+const DEFAULT_PRINCIPAL = 1000000;
+
 // ── 스냅샷 데이터 가져오기 (폴백 포함) ──
 async function fetchSnapshotMap(
   snapshotDate: string,
   userIds: string[]
-): Promise<Map<string, number>> {
-  const snapshotMap = new Map<string, number>();
+): Promise<Map<string, SnapshotInfo>> {
+  const snapshotMap = new Map<string, SnapshotInfo>();
 
   // 해당 날짜 스냅샷
   const { data: snapshotData, error } = await supabase
     .from("portfolio_snapshots")
-    .select("user_id, total_assets")
+    .select("user_id, total_assets, total_principal")
     .eq("snapshot_date", snapshotDate);
 
   if (error) {
@@ -171,7 +181,10 @@ async function fetchSnapshotMap(
 
   if (snapshotData) {
     for (const row of snapshotData) {
-      snapshotMap.set(row.user_id as string, Number(row.total_assets));
+      snapshotMap.set(row.user_id as string, {
+        totalAssets: Number(row.total_assets) || DEFAULT_ASSETS,
+        totalPrincipal: Number(row.total_principal) || DEFAULT_PRINCIPAL,
+      });
     }
   }
 
@@ -180,7 +193,7 @@ async function fetchSnapshotMap(
   if (missingIds.length > 0) {
     const { data: fallbackData } = await supabase
       .from("portfolio_snapshots")
-      .select("user_id, total_assets, snapshot_date")
+      .select("user_id, total_assets, total_principal, snapshot_date")
       .in("user_id", missingIds)
       .order("snapshot_date", { ascending: true });
 
@@ -190,9 +203,22 @@ async function fetchSnapshotMap(
         const uid = row.user_id as string;
         if (!seen.has(uid)) {
           seen.add(uid);
-          snapshotMap.set(uid, Number(row.total_assets));
+          snapshotMap.set(uid, {
+            totalAssets: Number(row.total_assets) || DEFAULT_ASSETS,
+            totalPrincipal: Number(row.total_principal) || DEFAULT_PRINCIPAL,
+          });
         }
       }
+    }
+  }
+
+  // 여전히 없는 유저 → 기본값
+  for (const uid of userIds) {
+    if (!snapshotMap.has(uid)) {
+      snapshotMap.set(uid, {
+        totalAssets: DEFAULT_ASSETS,
+        totalPrincipal: DEFAULT_PRINCIPAL,
+      });
     }
   }
 
@@ -217,23 +243,27 @@ function RoeRankingTable({ users }: { users: PortfolioRow[] }) {
     const ids = users.map((u) => u.userId);
     const snapMap = await fetchSnapshotMap(date, ids);
 
+    // 순수 수익 계산:
+    // 현재 순수 누적 수익 = balance - totalPrincipal
+    // 과거 스냅샷 순수 수익 = snap.totalAssets - snap.totalPrincipal
+    // 기간별 수익금 = 현재 순수 누적 수익 - 과거 스냅샷 순수 수익
+    // 기간별 수익률 = 기간별 수익금 / snap.totalAssets * 100
     const ranked: RankedUser[] = users.map((u) => {
-      const sv = snapMap.get(u.userId);
-      const has = sv != null && sv > 0;
+      const snap = snapMap.get(u.userId)!;
+      const currentPureProfit = u.balance - u.totalPrincipal;
+      const pastPureProfit = snap.totalAssets - snap.totalPrincipal;
+      const periodProfit = currentPureProfit - pastPureProfit;
+      const periodRoe =
+        snap.totalAssets > 0 ? (periodProfit / snap.totalAssets) * 100 : 0;
+
       return {
         ...u,
-        snapshotAssets: has ? sv : null,
-        profit: has ? u.balance - sv : null,
-        roe: has ? ((u.balance - sv) / sv) * 100 : null,
+        profit: periodProfit,
+        roe: periodRoe,
       };
     });
 
-    ranked.sort((a, b) => {
-      if (a.roe == null && b.roe == null) return 0;
-      if (a.roe == null) return 1;
-      if (b.roe == null) return -1;
-      return b.roe - a.roe;
-    });
+    ranked.sort((a, b) => (b.roe ?? 0) - (a.roe ?? 0));
 
     setRankings(ranked.slice(0, MAX_RANK));
     setInitialLoading(false);
@@ -274,20 +304,14 @@ function RoeRankingTable({ users }: { users: PortfolioRow[] }) {
             const rank = idx + 1;
             return (
               <RankRow key={user.userId} rank={rank} user={user}>
-                {user.roe == null ? (
-                  <span className="text-[11px] text-muted-foreground/50">
-                    —
-                  </span>
-                ) : (
-                  <span
-                    className={`text-xs sm:text-sm font-semibold tabular-nums ${
-                      user.roe >= 0 ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {user.roe >= 0 ? "+" : ""}
-                    {fmtPct(user.roe)}%
-                  </span>
-                )}
+                <span
+                  className={`text-xs sm:text-sm font-semibold tabular-nums ${
+                    (user.roe ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
+                  }`}
+                >
+                  {(user.roe ?? 0) >= 0 ? "+" : ""}
+                  {fmtPct(user.roe ?? 0)}%
+                </span>
               </RankRow>
             );
           })}
@@ -316,22 +340,21 @@ function ProfitRankingTable({ users }: { users: PortfolioRow[] }) {
     const snapMap = await fetchSnapshotMap(date, ids);
 
     const ranked: RankedUser[] = users.map((u) => {
-      const sv = snapMap.get(u.userId);
-      const has = sv != null && sv > 0;
+      const snap = snapMap.get(u.userId)!;
+      const currentPureProfit = u.balance - u.totalPrincipal;
+      const pastPureProfit = snap.totalAssets - snap.totalPrincipal;
+      const periodProfit = currentPureProfit - pastPureProfit;
+      const periodRoe =
+        snap.totalAssets > 0 ? (periodProfit / snap.totalAssets) * 100 : 0;
+
       return {
         ...u,
-        snapshotAssets: has ? sv : null,
-        profit: has ? u.balance - sv : null,
-        roe: has ? ((u.balance - sv) / sv) * 100 : null,
+        profit: periodProfit,
+        roe: periodRoe,
       };
     });
 
-    ranked.sort((a, b) => {
-      if (a.profit == null && b.profit == null) return 0;
-      if (a.profit == null) return 1;
-      if (b.profit == null) return -1;
-      return b.profit - a.profit;
-    });
+    ranked.sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0));
 
     setRankings(ranked.slice(0, MAX_RANK));
     setInitialLoading(false);
@@ -370,19 +393,16 @@ function ProfitRankingTable({ users }: { users: PortfolioRow[] }) {
             const rank = idx + 1;
             return (
               <RankRow key={user.userId} rank={rank} user={user}>
-                {user.profit == null ? (
-                  <span className="text-[11px] text-muted-foreground/50">
-                    —
-                  </span>
-                ) : (
-                  <span
-                    className={`text-xs sm:text-sm font-semibold tabular-nums ${
-                      user.profit >= 0 ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {user.profit >= 0 ? "+" : ""}${fmtUsd(user.profit)}
-                  </span>
-                )}
+                <span
+                  className={`text-xs sm:text-sm font-semibold tabular-nums ${
+                    (user.profit ?? 0) >= 0
+                      ? "text-emerald-400"
+                      : "text-red-400"
+                  }`}
+                >
+                  {(user.profit ?? 0) >= 0 ? "+" : ""}$
+                  {fmtUsd(user.profit ?? 0)}
+                </span>
               </RankRow>
             );
           })}
@@ -418,7 +438,6 @@ function TotalRankingTable({ users }: { users: PortfolioRow[] }) {
             const rank = idx + 1;
             const rankedUser: RankedUser = {
               ...user,
-              snapshotAssets: null,
               profit: null,
               roe: null,
             };
@@ -518,7 +537,9 @@ export default function RankingPage() {
     const fetch = async () => {
       const { data, error } = await supabase
         .from("portfolios")
-        .select("user_id, balance, profiles(nickname, avatar_url)")
+        .select(
+          "user_id, balance, total_principal, profiles(nickname, avatar_url)"
+        )
         .order("balance", { ascending: false });
 
       if (error) {
@@ -535,6 +556,7 @@ export default function RankingPage() {
         return {
           userId: row.user_id as string,
           balance: Number(row.balance) || 0,
+          totalPrincipal: Number(row.total_principal) || 0,
           nickname: (profile?.nickname as string) ?? "익명",
           avatarUrl: (profile?.avatar_url as string) ?? null,
         };

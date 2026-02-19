@@ -277,10 +277,19 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       const { balance } = get();
       const newBalance = balance + 1000000;
 
+      // 현재 total_principal 조회
+      const { data: curPortfolio } = await supabase
+        .from("portfolios")
+        .select("total_principal")
+        .eq("user_id", userId)
+        .single();
+      const curPrincipal = Number(curPortfolio?.total_principal) || 0;
+
       const { error: updateErr } = await supabase
         .from("portfolios")
         .update({
           balance: newBalance,
+          total_principal: curPrincipal + 1000000,
           last_attendance_date: today,
         })
         .eq("user_id", userId);
