@@ -113,13 +113,7 @@ function UserAvatar({
 }
 
 // ── 포지션 카드 컴포넌트 (채팅 메시지 내) ──
-function PositionCard({
-  data,
-  isMe,
-}: {
-  data: SharedPosition;
-  isMe: boolean;
-}) {
+function PositionCard({ data, isMe }: { data: SharedPosition; isMe: boolean }) {
   const isLong = data.position_type === "LONG";
   const isProfitable = data.pnl >= 0;
 
@@ -210,15 +204,14 @@ function PositionCard({
 // ── 포지션 선택 패널 ──
 function PositionPicker({
   positions,
-  currentPrice,
   onSelect,
   onClose,
 }: {
   positions: Trade[];
-  currentPrice: number;
   onSelect: (trade: Trade) => void;
   onClose: () => void;
 }) {
+  const currentPrice = useTradingStore((s) => s.currentPrice);
   if (positions.length === 0) {
     return (
       <div className="absolute bottom-full left-0 right-0 mb-2 bg-card border border-border rounded-xl shadow-xl p-3">
@@ -307,7 +300,6 @@ export default function ChatWidget() {
   const nickname = useAuthStore((s) => s.nickname);
   const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const positions = useTradingStore((s) => s.positions);
-  const currentPrice = useTradingStore((s) => s.currentPrice);
   const fetchOpenPositions = useTradingStore((s) => s.fetchOpenPositions);
 
   const [isOpen, setIsOpen] = useState(false);
@@ -466,7 +458,9 @@ export default function ChatWidget() {
     async (trade: Trade) => {
       if (!user || sending) return;
 
-      const { pnl, roe } = calcPnl(trade, currentPrice);
+      // 전송 시점의 최신 가격을 스토어에서 직접 읽기
+      const latestPrice = useTradingStore.getState().currentPrice;
+      const { pnl, roe } = calcPnl(trade, latestPrice);
 
       const positionData: SharedPosition = {
         position_type: trade.position_type,
@@ -475,7 +469,7 @@ export default function ChatWidget() {
         margin: trade.margin,
         pnl,
         roe,
-        current_price: currentPrice,
+        current_price: latestPrice,
       };
 
       const content = buildPositionMessage(positionData);
@@ -494,7 +488,7 @@ export default function ChatWidget() {
 
       setSending(false);
     },
-    [user, sending, currentPrice]
+    [user, sending]
   );
 
   // ── 시간 포맷 ──
@@ -587,17 +581,21 @@ export default function ChatWidget() {
                 return (
                   <div
                     key={msg.id}
-                    className={`flex gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                    className={`flex gap-2 ${
+                      isMe ? "flex-row-reverse" : "flex-row"
+                    }`}
                   >
                     {/* 아바타 */}
                     <UserAvatar
-                      nickname={isMe ? (nickname ?? "나") : msg.nickname}
+                      nickname={isMe ? nickname ?? "나" : msg.nickname}
                       avatarUrl={isMe ? avatarUrl : msg.avatar_url}
                     />
 
                     {/* 메시지 본문 */}
                     <div
-                      className={`flex flex-col flex-1 min-w-0 ${isMe ? "items-end" : "items-start"}`}
+                      className={`flex flex-col flex-1 min-w-0 ${
+                        isMe ? "items-end" : "items-start"
+                      }`}
                     >
                       {/* 닉네임 + 시간 */}
                       <div className="flex items-center gap-1.5 mb-0.5 px-1">
@@ -641,7 +639,6 @@ export default function ChatWidget() {
             {showPositionPicker && (
               <PositionPicker
                 positions={positions}
-                currentPrice={currentPrice}
                 onSelect={handleSharePosition}
                 onClose={() => setShowPositionPicker(false)}
               />

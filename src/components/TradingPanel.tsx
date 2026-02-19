@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { TrendingUp, TrendingDown, Gift } from "lucide-react";
+import { TrendingUp, TrendingDown, Gift, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import { useTradingStore } from "@/store/tradingStore";
@@ -15,8 +15,17 @@ export default function TradingPanel() {
 
   const currentPrice = useTradingStore((s) => s.currentPrice);
   const balance = useTradingStore((s) => s.balance);
+  const lastAttendanceDate = useTradingStore((s) => s.lastAttendanceDate);
   const claimAttendance = useTradingStore((s) => s.claimAttendance);
   const openPosition = useTradingStore((s) => s.openPosition);
+
+  // 오늘 이미 출석체크 했는지 판별
+  const todayKST = (() => {
+    const now = new Date();
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    return kst.toISOString().slice(0, 10);
+  })();
+  const alreadyClaimed = lastAttendanceDate === todayKST;
 
   const [leverage, setLeverage] = useState(10);
   const [marginInput, setMarginInput] = useState("");
@@ -104,10 +113,24 @@ export default function TradingPanel() {
         {user && (
           <button
             onClick={handleAttendance}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 rounded-lg transition-colors cursor-pointer"
+            disabled={alreadyClaimed}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
+              alreadyClaimed
+                ? "bg-emerald-500/10 text-emerald-400/60 cursor-default"
+                : "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 cursor-pointer"
+            }`}
           >
-            <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-            보상 받기
+            {alreadyClaimed ? (
+              <>
+                <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                출석 완료
+              </>
+            ) : (
+              <>
+                <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                출석체크
+              </>
+            )}
           </button>
         )}
       </div>
