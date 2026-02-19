@@ -72,6 +72,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       // 로그인 성공 시 profiles 테이블에 유저 정보 upsert
       if (event === "SIGNED_IN" && session?.user) {
         upsertProfile(session.user);
+
+        // Supabase OAuth 콜백 후 URL 해시 프래그먼트(#access_token=...) 정리
+        if (window.location.hash) {
+          window.history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search
+          );
+        }
       }
     });
 

@@ -2,22 +2,25 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+import { useTradingStore } from "@/store/tradingStore";
 import { Button } from "@/ui/button";
 
 export default function TradingPanel() {
   const user = useAuthStore((s) => s.user);
+  const currentPrice = useTradingStore((s) => s.currentPrice);
   const navigate = useNavigate();
-  const [amount, setAmount] = useState("100000");
+  const [amount, setAmount] = useState("100");
+  const [leverage, setLeverage] = useState("10x");
 
   const handleTrade = (direction: "long" | "short") => {
-    // 로그인 안 되어 있으면 /login으로 리다이렉트
     if (!user) {
       navigate({ to: "/login" });
       return;
     }
-
     // TODO: 실제 거래 로직 구현
-    console.log(`${direction} 포지션 오픈: ₩${amount}`);
+    console.log(
+      `${direction} 포지션 오픈: $${amount} | ${leverage} | 진입가 $${currentPrice}`
+    );
   };
 
   return (
@@ -31,42 +34,52 @@ export default function TradingPanel() {
             ₿
           </div>
           <div>
-            <p className="text-sm font-medium text-foreground">BTC/KRW</p>
+            <p className="text-sm font-medium text-foreground">BTC/USDT</p>
             <p className="text-xs text-muted-foreground">비트코인</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-sm font-medium text-foreground">₩65,432,100</p>
-          <p className="text-xs text-emerald-400">+2.34%</p>
+          <p className="text-sm font-medium text-foreground tabular-nums">
+            {currentPrice > 0
+              ? `$${currentPrice.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`
+              : "—"}
+          </p>
         </div>
       </div>
 
       {/* Amount input */}
       <div>
         <label className="text-xs text-muted-foreground mb-1.5 block">
-          주문 금액 (KRW)
+          주문 금액 (USDT)
         </label>
         <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-            ₩
+            $
           </span>
           <input
             type="text"
             value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
             className="w-full bg-secondary border border-border rounded-lg pl-7 pr-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
             placeholder="금액 입력"
           />
         </div>
         {/* Quick amount buttons */}
         <div className="flex gap-1.5 mt-2">
-          {["100000", "500000", "1000000", "5000000"].map((v) => (
+          {["100", "500", "1000", "5000"].map((v) => (
             <button
               key={v}
               onClick={() => setAmount(v)}
-              className="flex-1 text-xs py-1 rounded-md bg-secondary hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className={`flex-1 text-xs py-1 rounded-md transition-colors cursor-pointer ${
+                amount === v
+                  ? "bg-indigo-500/20 text-indigo-400 ring-1 ring-indigo-500/40"
+                  : "bg-secondary hover:bg-accent text-muted-foreground hover:text-foreground"
+              }`}
             >
-              {Number(v).toLocaleString()}
+              ${Number(v).toLocaleString()}
             </button>
           ))}
         </div>
@@ -78,10 +91,15 @@ export default function TradingPanel() {
           레버리지
         </label>
         <div className="flex gap-1.5">
-          {["1x", "2x", "5x", "10x"].map((lev) => (
+          {["1x", "2x", "5x", "10x", "20x"].map((lev) => (
             <button
               key={lev}
-              className="flex-1 text-xs py-1.5 rounded-md bg-secondary hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              onClick={() => setLeverage(lev)}
+              className={`flex-1 text-xs py-1.5 rounded-md transition-colors cursor-pointer ${
+                leverage === lev
+                  ? "bg-indigo-500/20 text-indigo-400 ring-1 ring-indigo-500/40"
+                  : "bg-secondary hover:bg-accent text-muted-foreground hover:text-foreground"
+              }`}
             >
               {lev}
             </button>
