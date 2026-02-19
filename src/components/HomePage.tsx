@@ -72,43 +72,6 @@ export default function HomePage() {
           <PriceDisplay />
         </div>
 
-        {/* 구분선 */}
-        <div className="h-8 w-px bg-border hidden sm:block" />
-
-        {/* 24시간 변동 — 추후 실제 데이터 연동 */}
-        <div className="hidden sm:block">
-          <p className="text-xs text-muted-foreground mb-0.5">24h 변동</p>
-          <p className="text-sm font-semibold text-muted-foreground tabular-nums leading-tight">
-            —
-          </p>
-        </div>
-
-        <div className="h-8 w-px bg-border hidden md:block" />
-
-        <div className="hidden md:block">
-          <p className="text-xs text-muted-foreground mb-0.5">24h 최고가</p>
-          <p className="text-sm font-semibold text-muted-foreground tabular-nums leading-tight">
-            —
-          </p>
-        </div>
-
-        <div className="h-8 w-px bg-border hidden md:block" />
-
-        <div className="hidden md:block">
-          <p className="text-xs text-muted-foreground mb-0.5">24h 최저가</p>
-          <p className="text-sm font-semibold text-muted-foreground tabular-nums leading-tight">
-            —
-          </p>
-        </div>
-
-        <div className="h-8 w-px bg-border hidden lg:block" />
-
-        <div className="hidden lg:block">
-          <p className="text-xs text-muted-foreground mb-0.5">24h 거래량</p>
-          <p className="text-sm font-semibold text-muted-foreground tabular-nums leading-tight">
-            —
-          </p>
-        </div>
       </div>
 
       {/* ── 차트 + 주문 패널 ── */}
