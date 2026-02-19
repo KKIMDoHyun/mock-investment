@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { MessageCircle, X, SendHorizontal } from "lucide-react";
+import {
+  MessageCircle,
+  X,
+  SendHorizontal,
+  TrendingUp,
+  ChevronUp,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
+import { useTradingStore, calcPnl } from "@/store/tradingStore";
+import type { Trade } from "@/store/tradingStore";
 
 // ── 타입 ──
 interface ChatMessage {
@@ -10,6 +18,37 @@ interface ChatMessage {
   content: string;
   created_at: string;
   nickname: string;
+}
+
+/** 포지션 공유 메시지 데이터 */
+interface SharedPosition {
+  position_type: "LONG" | "SHORT";
+  leverage: number;
+  entry_price: number;
+  margin: number;
+  pnl: number;
+  roe: number;
+  current_price: number;
+}
+
+// ── 포지션 메시지 접두사 ──
+const POSITION_PREFIX = "[POSITION]";
+
+function isPositionMessage(content: string): boolean {
+  return content.startsWith(POSITION_PREFIX);
+}
+
+function parsePositionMessage(content: string): SharedPosition | null {
+  try {
+    const json = content.slice(POSITION_PREFIX.length);
+    return JSON.parse(json) as SharedPosition;
+  } catch {
+    return null;
+  }
+}
+
+function buildPositionMessage(data: SharedPosition): string {
+  return POSITION_PREFIX + JSON.stringify(data);
 }
 
 // ── 닉네임 캐시 (프로필 조인 결과) ──
@@ -29,9 +68,196 @@ async function fetchNickname(userId: string): Promise<string> {
   return nickname;
 }
 
+// ── 포지션 카드 컴포넌트 (채팅 메시지 내) ──
+function PositionCard({
+  data,
+  isMe,
+}: {
+  data: SharedPosition;
+  isMe: boolean;
+}) {
+  const isLong = data.position_type === "LONG";
+  const isProfitable = data.pnl >= 0;
+
+  return (
+    <div
+      className={`max-w-[90%] rounded-xl overflow-hidden border ${
+        isMe ? "border-indigo-500/30" : "border-border"
+      }`}
+    >
+      {/* 카드 헤더 */}
+      <div
+        className={`px-3 py-1.5 flex items-center justify-between text-[11px] font-semibold ${
+          isLong
+            ? "bg-emerald-500/15 text-emerald-400"
+            : "bg-red-500/15 text-red-400"
+        }`}
+      >
+        <div className="flex items-center gap-1.5">
+          <TrendingUp className="h-3 w-3" />
+          <span>
+            BTC/USDT {data.position_type} {data.leverage}x
+          </span>
+        </div>
+        <span className="text-[10px] opacity-70">포지션 공유</span>
+      </div>
+
+      {/* 카드 바디 */}
+      <div className="bg-card/80 px-3 py-2 space-y-1">
+        {/* 진입가 / 현재가 */}
+        <div className="flex justify-between text-[11px]">
+          <span className="text-muted-foreground">진입가</span>
+          <span className="text-foreground tabular-nums">
+            ${data.entry_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </span>
+        </div>
+        <div className="flex justify-between text-[11px]">
+          <span className="text-muted-foreground">공유 시점 가격</span>
+          <span className="text-foreground tabular-nums">
+            $
+            {data.current_price.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}
+          </span>
+        </div>
+        <div className="flex justify-between text-[11px]">
+          <span className="text-muted-foreground">증거금</span>
+          <span className="text-foreground tabular-nums">
+            ${data.margin.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </span>
+        </div>
+
+        {/* 수익 */}
+        <div className="pt-1 border-t border-border/50 flex justify-between items-center">
+          <span className="text-[11px] text-muted-foreground">수익 (ROE)</span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`text-xs font-bold tabular-nums ${
+                isProfitable ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              {isProfitable ? "+" : ""}
+              {data.roe.toFixed(2)}%
+            </span>
+            <span
+              className={`text-[11px] font-semibold tabular-nums ${
+                isProfitable ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              ({isProfitable ? "+" : ""}$
+              {data.pnl.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+              )
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 포지션 선택 패널 ──
+function PositionPicker({
+  positions,
+  currentPrice,
+  onSelect,
+  onClose,
+}: {
+  positions: Trade[];
+  currentPrice: number;
+  onSelect: (trade: Trade) => void;
+  onClose: () => void;
+}) {
+  if (positions.length === 0) {
+    return (
+      <div className="absolute bottom-full left-0 right-0 mb-2 bg-card border border-border rounded-xl shadow-xl p-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold text-foreground">
+            포지션 자랑하기 📈
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <p className="text-[11px] text-muted-foreground text-center py-3">
+          현재 열려있는 포지션이 없습니다.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute bottom-full left-0 right-0 mb-2 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <span className="text-xs font-semibold text-foreground">
+          포지션 자랑하기 📈
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="max-h-48 overflow-y-auto">
+        {positions.map((trade) => {
+          const { pnl, roe } = calcPnl(trade, currentPrice);
+          const isLong = trade.position_type === "LONG";
+          const isProfitable = pnl >= 0;
+
+          return (
+            <button
+              key={trade.id}
+              type="button"
+              onClick={() => onSelect(trade)}
+              className="w-full px-3 py-2 flex items-center justify-between hover:bg-secondary/50 transition-colors text-left"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                    isLong
+                      ? "bg-emerald-500/15 text-emerald-400"
+                      : "bg-red-500/15 text-red-400"
+                  }`}
+                >
+                  {trade.position_type} {trade.leverage}x
+                </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  $
+                  {trade.entry_price.toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })}
+                </span>
+              </div>
+              <span
+                className={`text-[11px] font-semibold tabular-nums ${
+                  isProfitable ? "text-emerald-400" : "text-red-400"
+                }`}
+              >
+                {isProfitable ? "+" : ""}
+                {roe.toFixed(2)}%
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── 메인 ChatWidget ──
 export default function ChatWidget() {
   const user = useAuthStore((s) => s.user);
   const nickname = useAuthStore((s) => s.nickname);
+  const positions = useTradingStore((s) => s.positions);
+  const currentPrice = useTradingStore((s) => s.currentPrice);
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -39,6 +265,7 @@ export default function ChatWidget() {
   const [sending, setSending] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showPositionPicker, setShowPositionPicker] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -81,11 +308,10 @@ export default function ChatWidget() {
     setLoaded(true);
   }, []);
 
-  // ── 채팅창 열릴 때 로드 + 실시간 구독 ──
+  // ── 채팅창 열릴 때 로드 ──
   useEffect(() => {
     if (!isOpen) return;
 
-    // 열릴 때 읽지 않은 메시지 카운트 초기화
     setUnreadCount(0);
 
     if (!loaded) {
@@ -95,7 +321,7 @@ export default function ChatWidget() {
     }
   }, [isOpen, loaded, loadMessages, scrollToBottom]);
 
-  // ── Supabase Realtime 구독 (항상 활성화 — 안 읽은 메시지 카운트용) ──
+  // ── Supabase Realtime 구독 ──
   useEffect(() => {
     const channel = supabase
       .channel("public:messages")
@@ -121,12 +347,6 @@ export default function ChatWidget() {
           };
 
           setMessages((prev) => [...prev, newMsg]);
-
-          // 채팅창이 닫혀있으면 읽지 않은 메시지 카운트 증가
-          setUnreadCount((prev) => {
-            // isOpen 상태를 직접 참조하면 클로저 문제 → ref 대신 state 체크
-            return prev; // 아래에서 별도 처리
-          });
         }
       )
       .subscribe();
@@ -136,20 +356,22 @@ export default function ChatWidget() {
     };
   }, []);
 
-  // 새 메시지 올 때 처리: 열려있으면 스크롤, 닫혀있으면 카운트 증가
+  // 새 메시지 올 때: 열려있으면 스크롤, 닫혀있으면 카운트++
   const prevLengthRef = useRef(messages.length);
   useEffect(() => {
     if (messages.length > prevLengthRef.current) {
       if (isOpen) {
         scrollToBottom();
       } else {
-        setUnreadCount((prev) => prev + (messages.length - prevLengthRef.current));
+        setUnreadCount(
+          (prev) => prev + (messages.length - prevLengthRef.current)
+        );
       }
     }
     prevLengthRef.current = messages.length;
   }, [messages.length, isOpen, scrollToBottom]);
 
-  // ── 메시지 전송 ──
+  // ── 일반 메시지 전송 ──
   const handleSend = useCallback(async () => {
     if (!user || !input.trim() || sending) return;
 
@@ -164,11 +386,47 @@ export default function ChatWidget() {
 
     if (error) {
       console.error("메시지 전송 에러:", error.message);
-      setInput(content); // 실패 시 복원
+      setInput(content);
     }
 
     setSending(false);
   }, [user, input, sending]);
+
+  // ── 포지션 공유 메시지 전송 ──
+  const handleSharePosition = useCallback(
+    async (trade: Trade) => {
+      if (!user || sending) return;
+
+      const { pnl, roe } = calcPnl(trade, currentPrice);
+
+      const positionData: SharedPosition = {
+        position_type: trade.position_type,
+        leverage: trade.leverage,
+        entry_price: trade.entry_price,
+        margin: trade.margin,
+        pnl,
+        roe,
+        current_price: currentPrice,
+      };
+
+      const content = buildPositionMessage(positionData);
+
+      setSending(true);
+      setShowPositionPicker(false);
+
+      const { error } = await supabase.from("messages").insert({
+        user_id: user.id,
+        content,
+      });
+
+      if (error) {
+        console.error("포지션 공유 에러:", error.message);
+      }
+
+      setSending(false);
+    },
+    [user, sending, currentPrice]
+  );
 
   // ── 시간 포맷 ──
   const formatTime = (dateStr: string) => {
@@ -243,6 +501,10 @@ export default function ChatWidget() {
             ) : (
               messages.map((msg) => {
                 const isMe = user?.id === msg.user_id;
+                const posData = isPositionMessage(msg.content)
+                  ? parsePositionMessage(msg.content)
+                  : null;
+
                 return (
                   <div
                     key={msg.id}
@@ -261,16 +523,21 @@ export default function ChatWidget() {
                         {formatTime(msg.created_at)}
                       </span>
                     </div>
-                    {/* 메시지 말풍선 */}
-                    <div
-                      className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-sm break-words ${
-                        isMe
-                          ? "bg-indigo-500/20 text-foreground rounded-br-md"
-                          : "bg-secondary text-foreground rounded-bl-md"
-                      }`}
-                    >
-                      {msg.content}
-                    </div>
+
+                    {/* 포지션 카드 or 일반 메시지 */}
+                    {posData ? (
+                      <PositionCard data={posData} isMe={isMe} />
+                    ) : (
+                      <div
+                        className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-sm break-words ${
+                          isMe
+                            ? "bg-indigo-500/20 text-foreground rounded-br-md"
+                            : "bg-secondary text-foreground rounded-bl-md"
+                        }`}
+                      >
+                        {msg.content}
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -279,9 +546,37 @@ export default function ChatWidget() {
           </div>
 
           {/* 입력 영역 */}
-          <div className="px-3 py-2.5 border-t border-border bg-card">
+          <div className="relative px-3 py-2.5 border-t border-border bg-card">
+            {/* 포지션 선택 패널 */}
+            {showPositionPicker && (
+              <PositionPicker
+                positions={positions}
+                currentPrice={currentPrice}
+                onSelect={handleSharePosition}
+                onClose={() => setShowPositionPicker(false)}
+              />
+            )}
+
             {user ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                {/* 포지션 자랑 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => setShowPositionPicker((prev) => !prev)}
+                  title="포지션 자랑하기"
+                  className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg transition-colors ${
+                    showPositionPicker
+                      ? "bg-indigo-500/20 text-indigo-400"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                  }`}
+                >
+                  {showPositionPicker ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <TrendingUp className="h-4 w-4" />
+                  )}
+                </button>
+
                 <input
                   type="text"
                   value={input}
@@ -294,13 +589,13 @@ export default function ChatWidget() {
                   }}
                   placeholder="메시지를 입력하세요..."
                   maxLength={500}
-                  className="flex-1 bg-secondary/50 border border-border rounded-lg px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-indigo-500/50 transition-colors"
+                  className="flex-1 min-w-0 bg-secondary/50 border border-border rounded-lg px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-indigo-500/50 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={handleSend}
                   disabled={!input.trim() || sending}
-                  className="w-8 h-8 flex items-center justify-center text-indigo-400 hover:text-indigo-300 disabled:text-muted-foreground/40 transition-colors"
+                  className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-indigo-400 hover:text-indigo-300 disabled:text-muted-foreground/40 transition-colors"
                 >
                   <SendHorizontal className="h-4 w-4" />
                 </button>
