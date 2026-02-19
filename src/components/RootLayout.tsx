@@ -3,6 +3,7 @@ import { Outlet } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import Header from "@/components/Header";
+import NicknameSetupModal from "@/components/NicknameSetupModal";
 
 export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
@@ -28,6 +29,7 @@ export default function RootLayout() {
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
       <Outlet />
+      <NicknameSetupModal />
       <Toaster
         theme="dark"
         position="top-right"

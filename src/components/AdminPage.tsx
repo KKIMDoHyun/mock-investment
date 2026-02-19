@@ -27,6 +27,7 @@ import {
 interface UserRow {
   id: string;
   email: string;
+  nickname: string;
   role: string;
   balance: number;
 }
@@ -69,7 +70,7 @@ export default function AdminPage() {
   const loadUsers = useCallback(async () => {
     const { data: profiles, error: profilesErr } = await supabase
       .from("profiles")
-      .select("id, email, role")
+      .select("id, email, nickname, role")
       .order("email", { ascending: true });
 
     if (profilesErr) {
@@ -94,6 +95,7 @@ export default function AdminPage() {
     return (profiles ?? []).map((p) => ({
       id: p.id as string,
       email: (p.email as string) ?? "",
+      nickname: (p.nickname as string) ?? "",
       role: (p.role as string) ?? "user",
       balance: balanceMap.get(p.id as string) ?? 0,
     }));
@@ -141,7 +143,11 @@ export default function AdminPage() {
     const query = searchQuery.trim().toLowerCase();
     let filtered = users;
     if (query) {
-      filtered = users.filter((u) => u.email.toLowerCase().includes(query));
+      filtered = users.filter(
+        (u) =>
+          u.email.toLowerCase().includes(query) ||
+          u.nickname.toLowerCase().includes(query)
+      );
     }
 
     // 2) admin / user 분리 → admin은 맨 위 고정, user만 정렬
@@ -317,7 +323,7 @@ export default function AdminPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="이메일로 검색..."
+            placeholder="이메일 또는 별명으로 검색..."
             value={searchQuery}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               setSearchQuery(e.target.value)
@@ -339,7 +345,7 @@ export default function AdminPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[280px]">
+              <TableHead className="w-[240px]">
                 <button
                   type="button"
                   onClick={() => handleSort("email")}
@@ -349,6 +355,7 @@ export default function AdminPage() {
                   {renderSortIcon("email")}
                 </button>
               </TableHead>
+              <TableHead className="w-[140px]">별명</TableHead>
               <TableHead className="w-[100px]">역할</TableHead>
               <TableHead className="w-[160px]">
                 <button
@@ -366,7 +373,7 @@ export default function AdminPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-12">
+                <TableCell colSpan={5} className="text-center py-12">
                   <div className="flex items-center justify-center gap-2 text-muted-foreground">
                     <RefreshCw className="h-4 w-4 animate-spin" />
                     불러오는 중...
@@ -376,7 +383,7 @@ export default function AdminPage() {
             ) : filteredAndSortedUsers.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={5}
                   className="text-center py-12 text-muted-foreground"
                 >
                   {searchQuery
@@ -389,6 +396,11 @@ export default function AdminPage() {
                 <TableRow key={u.id}>
                   {/* 이메일 */}
                   <TableCell className="font-medium">{u.email}</TableCell>
+
+                  {/* 별명 */}
+                  <TableCell className="text-muted-foreground">
+                    {u.nickname || "—"}
+                  </TableCell>
 
                   {/* 역할 */}
                   <TableCell>

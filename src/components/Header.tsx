@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { LogOut, User, ChevronDown, Shield } from "lucide-react";
+import { LogOut, User, ChevronDown, Shield, UserCog } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
 export default function Header() {
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
+  const nickname = useAuthStore((s) => s.nickname);
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const signOut = useAuthStore((s) => s.signOut);
 
@@ -50,10 +51,10 @@ export default function Header() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2">
                   <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-xs font-medium text-white">
-                    {user.email?.charAt(0).toUpperCase()}
+                    {(nickname ?? user.email)?.charAt(0).toUpperCase()}
                   </div>
                   <span className="hidden sm:inline text-sm text-muted-foreground max-w-[160px] truncate">
-                    {user.email}
+                    {nickname ?? user.email}
                   </span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </Button>
@@ -61,13 +62,21 @@ export default function Header() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">내 계정</p>
+                    <p className="text-sm font-medium leading-none">
+                      {nickname ?? "닉네임 없음"}
+                    </p>
                     <p className="text-xs leading-none text-muted-foreground">
                       {user.email}
                     </p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/profile" className="cursor-pointer">
+                    <UserCog className="mr-2 h-4 w-4" />
+                    <span>내 정보 설정</span>
+                  </Link>
+                </DropdownMenuItem>
                 {role === "admin" && (
                   <DropdownMenuItem asChild>
                     <Link to="/admin" className="cursor-pointer">
@@ -76,6 +85,7 @@ export default function Header() {
                     </Link>
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={signOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>로그아웃</span>
