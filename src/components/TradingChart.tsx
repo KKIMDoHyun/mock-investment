@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { Eye, Pencil, Star } from "lucide-react";
 import { createChart, CandlestickSeries, LineStyle } from "lightweight-charts";
 import type { UTCTimestamp } from "lightweight-charts";
-import { useTradingStore } from "@/store/tradingStore";
+import { useTradingStore, SYMBOLS } from "@/store/tradingStore";
 import { useAuthStore } from "@/store/authStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
@@ -23,20 +23,22 @@ const TIMEFRAMES = [
 
 const DEFAULT_FAVORITES = ["1m", "5m", "15m", "1h", "1d"];
 
-// ── Binance API 엔드포인트 헬퍼 (현물 API — 2017년부터 데이터 제공) ──
-function getRestUrl(interval: string, endTime?: number): string {
-  const base = `https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=${interval}&limit=500`;
+// ── Binance API 엔드포인트 헬퍼 (동적 심볼) ──
+function getRestUrl(symbol: string, interval: string, endTime?: number): string {
+  const info = SYMBOLS[symbol as keyof typeof SYMBOLS];
+  const base = `${info.restBase}&interval=${interval}&limit=500`;
   return endTime ? `${base}&endTime=${endTime}` : base;
 }
 
-function getWsUrl(interval: string): string {
-  return `wss://fstream.binance.com/ws/btcusdt@kline_${interval}`;
+function getWsUrl(symbol: string, interval: string): string {
+  const info = SYMBOLS[symbol as keyof typeof SYMBOLS];
+  return `wss://fstream.binance.com/ws/${info.wsStream}@kline_${interval}`;
 }
 
 // ══════════════════════════════════════════
 //  보기 모드 — lightweight-charts + 포지션 점선
 // ══════════════════════════════════════════
-function ViewChart({ timeframe }: { timeframe: string }) {
+function ViewChart({ timeframe, symbol }: { timeframe: string; symbol: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,7 +117,7 @@ function ViewChart({ timeframe }: { timeframe: string }) {
       const endTime = earliestTime * 1000 - 1;
 
       try {
-        const res = await fetch(getRestUrl(timeframe, endTime));
+        const res = await fetch(getRestUrl(symbol, timeframe, endTime));
         const data = await res.json();
         const newCandles = parseCandles(data as (string | number)[][]);
 
@@ -140,7 +142,7 @@ function ViewChart({ timeframe }: { timeframe: string }) {
     };
 
     // 히스토리 데이터 로드
-    fetch(getRestUrl(timeframe))
+    fetch(getRestUrl(symbol, timeframe))
       .then((r) => r.json())
       .then((data: unknown[]) => {
         const candles = parseCandles(data as (string | number)[][]);
@@ -159,7 +161,7 @@ function ViewChart({ timeframe }: { timeframe: string }) {
     });
 
     // 실시간 캔들 WebSocket
-    let ws: WebSocket | null = new WebSocket(getWsUrl(timeframe));
+    let ws: WebSocket | null = new WebSocket(getWsUrl(symbol, timeframe));
 
     ws.onmessage = (ev: MessageEvent) => {
       try {
@@ -231,7 +233,7 @@ function ViewChart({ timeframe }: { timeframe: string }) {
       seriesRef.current = null;
       priceLinesRef.current = [];
     };
-  }, [timeframe]);
+  }, [timeframe, symbol]);
 
   // ── 포지션 가격선 (점선) ──
   useEffect(() => {
@@ -330,7 +332,7 @@ function ViewChart({ timeframe }: { timeframe: string }) {
 //    client_id + user_id 를 전달하면 사용자별로 캐시가 분리됩니다.
 //    이것이 무료 임베드 위젯에서 가능한 최선의 영속화 방법입니다.
 // ══════════════════════════════════════════
-function DrawChart({ userId }: { userId: string }) {
+function DrawChart({ userId, tvSymbol }: { userId: string; tvSymbol: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -349,7 +351,7 @@ function DrawChart({ userId }: { userId: string }) {
     script.async = true;
     script.textContent = JSON.stringify({
       autosize: true,
-      symbol: "BINANCE:BTCUSDTPERP",
+      symbol: tvSymbol,
       interval: "1",
       timezone: "Asia/Seoul",
       theme: "dark",
@@ -373,7 +375,7 @@ function DrawChart({ userId }: { userId: string }) {
     return () => {
       container.innerHTML = "";
     };
-  }, [userId]);
+  }, [userId, tvSymbol]);
 
   return (
     <div
@@ -395,6 +397,8 @@ export default function TradingChart() {
   );
   const [showAll, setShowAll] = useLocalStorage("chart_show_all_tf", false);
 
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const symbolInfo = SYMBOLS[selectedSymbol];
   const supabaseUserId = useAuthStore((s) => s.user?.id);
   const tvUserId = supabaseUserId ?? "public";
 
@@ -493,9 +497,9 @@ export default function TradingChart() {
       {/* ── 차트 본체 ── */}
       <div className="flex-1 min-h-0">
         {mode === "view" ? (
-          <ViewChart timeframe={timeframe} />
+          <ViewChart timeframe={timeframe} symbol={selectedSymbol} />
         ) : (
-          <DrawChart userId={tvUserId} />
+          <DrawChart userId={tvUserId} tvSymbol={symbolInfo.tvSymbol} />
         )}
       </div>
     </div>

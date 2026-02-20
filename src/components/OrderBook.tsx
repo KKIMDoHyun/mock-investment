@@ -1,33 +1,38 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useTradingStore } from "@/store/tradingStore";
+import { useEffect, useState, useCallback } from "react";
+import { useTradingStore, SYMBOLS } from "@/store/tradingStore";
 
 interface OrderLevel {
   price: number;
   qty: number;
 }
 
-const DEPTH_WS_URL = "wss://fstream.binance.com/ws/btcusdt@depth10@500ms";
-
 export default function OrderBook() {
   const currentPrice = useTradingStore((s) => s.currentPrice);
   const setOrderBookPrice = useTradingStore((s) => s.setOrderBookPrice);
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const depthWsUrl = SYMBOLS[selectedSymbol].depthStream;
 
   const [asks, setAsks] = useState<OrderLevel[]>([]);
   const [bids, setBids] = useState<OrderLevel[]>([]);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 심볼 전환 시 이전 데이터 즉시 비우기
+  useEffect(() => {
+    setAsks([]);
+    setBids([]);
+  }, [depthWsUrl]);
 
   // WebSocket 연결
   useEffect(() => {
     let active = true;
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     function connect() {
       if (!active) return;
-      const ws = new WebSocket(DEPTH_WS_URL);
-      wsRef.current = ws;
+      ws = new WebSocket(depthWsUrl);
 
       ws.onmessage = (event: MessageEvent) => {
+        if (!active) return;
         try {
           const data = JSON.parse(event.data as string);
           const newAsks: OrderLevel[] = (data.a ?? [])
@@ -35,7 +40,7 @@ export default function OrderBook() {
               price: parseFloat(p),
               qty: parseFloat(q),
             }))
-            .sort((a: OrderLevel, b: OrderLevel) => a.price - b.price) // 낮은 가격부터
+            .sort((a: OrderLevel, b: OrderLevel) => a.price - b.price)
             .slice(0, 8);
 
           const newBids: OrderLevel[] = (data.b ?? [])
@@ -43,7 +48,7 @@ export default function OrderBook() {
               price: parseFloat(p),
               qty: parseFloat(q),
             }))
-            .sort((a: OrderLevel, b: OrderLevel) => b.price - a.price) // 높은 가격부터
+            .sort((a: OrderLevel, b: OrderLevel) => b.price - a.price)
             .slice(0, 8);
 
           setAsks(newAsks);
@@ -54,23 +59,27 @@ export default function OrderBook() {
       };
 
       ws.onclose = () => {
-        wsRef.current = null;
         if (active) {
-          reconnectRef.current = setTimeout(connect, 3000);
+          reconnectTimer = setTimeout(connect, 3000);
         }
       };
 
-      ws.onerror = () => ws.close();
+      ws.onerror = () => ws?.close();
     }
 
     connect();
 
     return () => {
       active = false;
-      if (reconnectRef.current) clearTimeout(reconnectRef.current);
-      wsRef.current?.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      }
     };
-  }, []);
+  }, [depthWsUrl]);
 
   // 호가 클릭 핸들러
   const handlePriceClick = useCallback(
@@ -97,7 +106,7 @@ export default function OrderBook() {
       {/* 테이블 헤더 */}
       <div className="flex items-center text-[10px] text-muted-foreground px-3 py-1 border-b border-border/50">
         <span className="flex-1">가격(USDT)</span>
-        <span className="text-right w-16">수량(BTC)</span>
+        <span className="text-right w-16">수량({selectedSymbol.replace("USDT", "")})</span>
       </div>
 
       {/* 매도 호가 (Asks) — 역순 (위에서 높은 가격, 아래로 갈수록 낮은 가격) */}

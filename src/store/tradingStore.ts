@@ -41,9 +41,43 @@ export function calcFee(
 
 // ── 타입 정의 ──
 
+export type SymbolId = "BTCUSDT" | "ETHUSDT";
+
+export interface SymbolInfo {
+  id: SymbolId;
+  label: string;
+  icon: string;
+  tvSymbol: string;
+  wsStream: string;
+  depthStream: string;
+  restBase: string;
+}
+
+export const SYMBOLS: Record<SymbolId, SymbolInfo> = {
+  BTCUSDT: {
+    id: "BTCUSDT",
+    label: "BTC/USDT",
+    icon: "₿",
+    tvSymbol: "BINANCE:BTCUSDTPERP",
+    wsStream: "btcusdt",
+    depthStream: "wss://fstream.binance.com/ws/btcusdt@depth10@500ms",
+    restBase: "https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT",
+  },
+  ETHUSDT: {
+    id: "ETHUSDT",
+    label: "ETH/USDT",
+    icon: "Ξ",
+    tvSymbol: "BINANCE:ETHUSDT.P",
+    wsStream: "ethusdt",
+    depthStream: "wss://fstream.binance.com/ws/ethusdt@depth10@500ms",
+    restBase: "https://fapi.binance.com/fapi/v1/klines?symbol=ETHUSDT",
+  },
+};
+
 export interface Trade {
   id: string;
   user_id: string;
+  symbol: SymbolId;
   position_type: "LONG" | "SHORT";
   leverage: number;
   margin: number;
@@ -61,6 +95,7 @@ export interface Trade {
 export interface LimitOrder {
   id: string;
   user_id: string;
+  symbol: SymbolId;
   position_type: "LONG" | "SHORT";
   leverage: number;
   margin: number;
@@ -74,8 +109,13 @@ export interface LimitOrder {
 }
 
 interface TradingState {
-  /** 바이낸스 실시간 BTCUSDT 현재가 */
+  /** 현재 선택된 심볼 */
+  selectedSymbol: SymbolId;
+  setSelectedSymbol: (symbol: SymbolId) => void;
+  /** 바이낸스 실시간 현재가 (선택된 심볼) */
   currentPrice: number;
+  /** 심볼별 최근 가격 캐시 */
+  prices: Record<SymbolId, number>;
   /** 유저 잔고 (USDT) */
   balance: number;
   /** 리필권 보유 수 */
@@ -157,8 +197,11 @@ interface TradingState {
 // ────────────────────────────────────────────
 // 모듈-레벨 WebSocket 관리 (컴포넌트 생명주기와 무관)
 // ────────────────────────────────────────────
-const PRICE_WS_URL = "wss://fstream.binance.com/ws/btcusdt@aggTrade";
-const THROTTLE_MS = 250; // 250ms마다 가격 업데이트 (초당 최대 4회)
+function getPriceWsUrl(): string {
+  const sym = useTradingStore.getState().selectedSymbol;
+  return `wss://fstream.binance.com/ws/${SYMBOLS[sym].wsStream}@aggTrade`;
+}
+const THROTTLE_MS = 250;
 const RECONNECT_BASE_MS = 2000;
 const RECONNECT_MAX_MS = 30000;
 
@@ -192,6 +235,7 @@ interface MergeResult {
 
 async function mergeOrCreatePosition(params: {
   userId: string;
+  symbol: SymbolId;
   positionType: "LONG" | "SHORT";
   leverage: number;
   margin: number;
@@ -199,11 +243,12 @@ async function mergeOrCreatePosition(params: {
   tpPrice?: number | null;
   slPrice?: number | null;
 }): Promise<MergeResult> {
-  // 1) 동일 방향 OPEN 포지션이 이미 있는지 확인
+  // 1) 동일 심볼 + 동일 방향 OPEN 포지션이 이미 있는지 확인
   const { data: existingRows } = await supabase
     .from("trades")
     .select("*")
     .eq("user_id", params.userId)
+    .eq("symbol", params.symbol)
     .eq("position_type", params.positionType)
     .eq("status", "OPEN")
     .limit(1);
@@ -284,6 +329,7 @@ async function mergeOrCreatePosition(params: {
     .from("trades")
     .insert({
       user_id: params.userId,
+      symbol: params.symbol,
       position_type: params.positionType,
       leverage: params.leverage,
       margin: params.margin,
@@ -320,7 +366,9 @@ async function checkAndFillPendingOrders(currentPrice: number) {
 
   isCheckingOrders = true;
   try {
+    const { selectedSymbol } = useTradingStore.getState();
     const ordersToFill = pendingOrders.filter((o) => {
+      if (o.symbol !== selectedSymbol) return false;
       if (o.position_type === "LONG") return currentPrice <= o.limit_price;
       if (o.position_type === "SHORT") return currentPrice >= o.limit_price;
       return false;
@@ -338,6 +386,7 @@ async function checkAndFillPendingOrders(currentPrice: number) {
       // 2) 포지션 병합 또는 신규 생성 (TP/SL 전이)
       const result = await mergeOrCreatePosition({
         userId: order.user_id,
+        symbol: order.symbol,
         positionType: order.position_type,
         leverage: order.leverage,
         margin: order.margin,
@@ -395,9 +444,9 @@ async function checkLiquidation(currentPrice: number) {
   const state = useTradingStore.getState();
   if (state.positions.length === 0) return;
 
-  // 청산가가 설정된 포지션만 대상
+  // 현재 심볼의 청산가가 설정된 포지션만 대상
   const candidates = state.positions.filter(
-    (t) => t.liquidation_price != null && t.liquidation_price > 0
+    (t) => t.symbol === state.selectedSymbol && t.liquidation_price != null && t.liquidation_price > 0
   );
   if (candidates.length === 0) return;
 
@@ -446,9 +495,9 @@ async function checkTpSlPositions(currentPrice: number) {
   const state = useTradingStore.getState();
   if (state.positions.length === 0) return;
 
-  // TP/SL이 설정된 포지션만 필터
+  // 현재 심볼의 TP/SL이 설정된 포지션만 필터
   const candidates = state.positions.filter(
-    (t) => t.tp_price != null || t.sl_price != null
+    (t) => t.symbol === state.selectedSymbol && (t.tp_price != null || t.sl_price != null)
   );
   if (candidates.length === 0) return;
 
@@ -505,7 +554,7 @@ function connectPriceWs() {
   )
     return;
 
-  priceWs = new WebSocket(PRICE_WS_URL);
+  priceWs = new WebSocket(getPriceWsUrl());
 
   priceWs.onopen = () => {
     reconnectDelay = RECONNECT_BASE_MS; // 성공 시 딜레이 초기화
@@ -520,7 +569,11 @@ function connectPriceWs() {
       const price = parseFloat(msg.p); // aggTrade → "p" = price
       if (Number.isFinite(price) && price > 0) {
         lastPriceTs = now;
-        useTradingStore.setState({ currentPrice: price });
+        const sym = useTradingStore.getState().selectedSymbol;
+        useTradingStore.setState((s) => ({
+          currentPrice: price,
+          prices: { ...s.prices, [sym]: price },
+        }));
 
         // 강제 청산 체크 (최우선 — 청산가 도달 시 즉시 종료)
         checkLiquidation(price);
@@ -549,10 +602,27 @@ function connectPriceWs() {
   };
 }
 
+/** 모든 심볼의 현재가를 REST로 가져와 prices에 캐시 */
+async function fetchAllSymbolPrices() {
+  try {
+    const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/price");
+    const data = (await res.json()) as { symbol: string; price: string }[];
+    const update: Partial<Record<SymbolId, number>> = {};
+    for (const sym of Object.keys(SYMBOLS) as SymbolId[]) {
+      const entry = data.find((d) => d.symbol === sym);
+      if (entry) update[sym] = parseFloat(entry.price);
+    }
+    useTradingStore.setState((s) => ({ prices: { ...s.prices, ...update } }));
+  } catch {
+    // 실패 시 무시
+  }
+}
+
 /** 가격 스트림 시작 (RootLayout 마운트 시 호출) */
 export function startPriceStream() {
   streamActive = true;
   connectPriceWs();
+  fetchAllSymbolPrices();
 }
 
 /** 가격 스트림 중지 (RootLayout 언마운트 시 호출) */
@@ -586,6 +656,7 @@ function toNum(v: unknown): number {
 export function sanitizeTrade(raw: Record<string, unknown>): Trade {
   return {
     ...raw,
+    symbol: (raw.symbol as SymbolId) || "BTCUSDT",
     leverage: toNum(raw.leverage),
     margin: toNum(raw.margin),
     entry_price: toNum(raw.entry_price),
@@ -602,6 +673,7 @@ export function sanitizeTrade(raw: Record<string, unknown>): Trade {
 export function sanitizeLimitOrder(raw: Record<string, unknown>): LimitOrder {
   return {
     ...raw,
+    symbol: (raw.symbol as SymbolId) || "BTCUSDT",
     leverage: toNum(raw.leverage),
     margin: toNum(raw.margin),
     limit_price: toNum(raw.limit_price),
@@ -654,7 +726,22 @@ export function calcPnl(
 // ── 스토어 ──
 
 export const useTradingStore = create<TradingState>((set, get) => ({
+  selectedSymbol: "BTCUSDT" as SymbolId,
+  setSelectedSymbol: (symbol: SymbolId) => {
+    const prevPrice = get().prices[symbol] || 0;
+    set({ selectedSymbol: symbol, currentPrice: prevPrice });
+    if (streamActive) {
+      if (priceWs) {
+        priceWs.onclose = null;
+        priceWs.close();
+        priceWs = null;
+      }
+      connectPriceWs();
+      fetchAllSymbolPrices();
+    }
+  },
   currentPrice: 0,
+  prices: { BTCUSDT: 0, ETHUSDT: 0 },
   balance: 0,
   refillTickets: 0,
   positions: [],
@@ -750,14 +837,15 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   // ── 리필권 사용 ──
   useRefillTicket: async (userId) => {
-    const { balance, refillTickets, positions, currentPrice } = get();
+    const { balance, refillTickets, positions, prices } = get();
 
     if (refillTickets <= 0) {
       return { success: false, message: "보유한 리필권이 없습니다." };
     }
 
     const positionValue = positions.reduce((sum, pos) => {
-      const { pnl } = calcPnl(pos, currentPrice);
+      const p = prices[pos.symbol] || 0;
+      const { pnl } = calcPnl(pos, p);
       return sum + pos.margin + pnl;
     }, 0);
     const equity = balance + positionValue;
@@ -920,6 +1008,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     // 2) 포지션 병합 또는 신규 생성
     const result = await mergeOrCreatePosition({
       userId,
+      symbol: get().selectedSymbol,
       positionType,
       leverage,
       margin,
@@ -1058,13 +1147,13 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       if (source === "liquidation") {
         sendSystemMessage(
           trade.user_id,
-          `🔥 청산 알림: ${nick}님이 BTCUSDT ${trade.position_type} ${trade.leverage}x 포지션에서 강제 청산당했습니다. (${roeText}% / ${pnlSign}$${pnlAbs})`
+          `🔥 청산 알림: ${nick}님이 ${trade.symbol} ${trade.position_type} ${trade.leverage}x 포지션에서 강제 청산당했습니다. (${roeText}% / ${pnlSign}$${pnlAbs})`
         );
       } else {
         const label = pnl >= 0 ? "익절" : "손절";
         sendSystemMessage(
           trade.user_id,
-          `${label} 알림: ${nick}님이 BTCUSDT ${trade.position_type} ${trade.leverage}x 포지션을 ${roeText}% (${pnlSign}$${pnlAbs}) 수익으로 종료했습니다!`
+          `${label} 알림: ${nick}님이 ${trade.symbol} ${trade.position_type} ${trade.leverage}x 포지션을 ${roeText}% (${pnlSign}$${pnlAbs}) 수익으로 종료했습니다!`
         );
       }
     }).catch(() => {});
@@ -1123,6 +1212,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       .from("orders")
       .insert({
         user_id: userId,
+        symbol: get().selectedSymbol,
         position_type: positionType,
         leverage,
         margin,

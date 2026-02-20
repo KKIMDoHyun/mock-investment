@@ -569,30 +569,34 @@ export default function RankingPage() {
       // 2) 모든 OPEN 포지션 조회
       const { data: tradesData } = await supabase
         .from("trades")
-        .select("user_id, position_type, entry_price, leverage, margin")
+        .select("user_id, symbol, position_type, entry_price, leverage, margin")
         .eq("status", "OPEN");
 
-      // 3) 현재 BTC 가격 조회
-      let btcPrice = 0;
+      // 3) 현재 시세 조회 (BTC + ETH)
+      const priceMap: Record<string, number> = {};
       try {
-        const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT");
-        const json = await res.json();
-        btcPrice = parseFloat(json.price) || 0;
+        const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/price");
+        const json = (await res.json()) as { symbol: string; price: string }[];
+        for (const item of json) {
+          priceMap[item.symbol] = parseFloat(item.price) || 0;
+        }
       } catch {
-        console.error("BTC 가격 조회 실패");
+        console.error("시세 조회 실패");
       }
 
       // 4) 유저별 포지션 가치 합산 (margin + pnl)
       const positionValueMap = new Map<string, number>();
       for (const t of tradesData ?? []) {
         const uid = t.user_id as string;
+        const sym = (t.symbol as string) || "BTCUSDT";
+        const symPrice = priceMap[sym] || 0;
         const margin = Number(t.margin) || 0;
         const pnl = calcUnrealizedPnl(
           t.position_type as "LONG" | "SHORT",
           Number(t.entry_price) || 0,
           Number(t.leverage) || 0,
           margin,
-          btcPrice
+          symPrice
         );
         positionValueMap.set(uid, (positionValueMap.get(uid) ?? 0) + margin + pnl);
       }

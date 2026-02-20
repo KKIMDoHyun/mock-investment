@@ -6,6 +6,7 @@ import {
   calcPnl,
   type Trade,
   type LimitOrder,
+  type SymbolId,
 } from "@/store/tradingStore";
 
 type Tab = "positions" | "orders" | "history";
@@ -78,17 +79,18 @@ function PriceSkeleton({ className }: { className?: string }) {
 
 // ── 개별 OPEN 포지션 행 (데스크탑 테이블용) ──
 function PositionRow({ trade }: { trade: Trade }) {
-  const currentPrice = useTradingStore((s) => s.currentPrice);
+  const prices = useTradingStore((s) => s.prices);
+  const tradePrice = prices[trade.symbol as SymbolId] || 0;
   const closePosition = useTradingStore((s) => s.closePosition);
   const [closing, setClosing] = useState(false);
 
-  const priceReady = currentPrice > 0;
-  const { pnl, roe, liqPrice } = calcPnl(trade, currentPrice);
+  const priceReady = tradePrice > 0;
+  const { pnl, roe, liqPrice } = calcPnl(trade, tradePrice);
   const isProfit = pnl >= 0;
 
   const handleClose = useCallback(async () => {
     setClosing(true);
-    const result = await closePosition(trade.id, currentPrice);
+    const result = await closePosition(trade.id, tradePrice);
     setClosing(false);
 
     if (result.success) {
@@ -96,14 +98,14 @@ function PositionRow({ trade }: { trade: Trade }) {
     } else {
       toast.error(result.message);
     }
-  }, [trade.id, currentPrice, closePosition]);
+  }, [trade.id, tradePrice, closePosition]);
 
   return (
     <tr className="border-b border-border/50 hover:bg-accent/20 transition-colors">
       {/* 종목 */}
       <td className="py-2.5 px-3">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground text-sm">BTCUSDT</span>
+          <span className="font-medium text-foreground text-sm">{trade.symbol}</span>
           <span
             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
               trade.position_type === "LONG"
@@ -131,7 +133,7 @@ function PositionRow({ trade }: { trade: Trade }) {
 
       {/* 현재가 */}
       <td className="py-2.5 px-3 text-right tabular-nums text-sm text-foreground">
-        {priceReady ? `$${fmtUsd(currentPrice)}` : <PriceSkeleton />}
+        {priceReady ? `$${fmtUsd(tradePrice)}` : <PriceSkeleton />}
       </td>
 
       {/* 청산가 */}
@@ -190,17 +192,18 @@ function PositionRow({ trade }: { trade: Trade }) {
 
 // ── 개별 OPEN 포지션 카드 (모바일용) ──
 function PositionCard({ trade }: { trade: Trade }) {
-  const currentPrice = useTradingStore((s) => s.currentPrice);
+  const prices = useTradingStore((s) => s.prices);
+  const tradePrice = prices[trade.symbol as SymbolId] || 0;
   const closePosition = useTradingStore((s) => s.closePosition);
   const [closing, setClosing] = useState(false);
 
-  const priceReady = currentPrice > 0;
-  const { pnl, roe, liqPrice } = calcPnl(trade, currentPrice);
+  const priceReady = tradePrice > 0;
+  const { pnl, roe, liqPrice } = calcPnl(trade, tradePrice);
   const isProfit = pnl >= 0;
 
   const handleClose = useCallback(async () => {
     setClosing(true);
-    const result = await closePosition(trade.id, currentPrice);
+    const result = await closePosition(trade.id, tradePrice);
     setClosing(false);
 
     if (result.success) {
@@ -208,14 +211,14 @@ function PositionCard({ trade }: { trade: Trade }) {
     } else {
       toast.error(result.message);
     }
-  }, [trade.id, currentPrice, closePosition]);
+  }, [trade.id, tradePrice, closePosition]);
 
   return (
     <div className="border-b border-border/50 px-3 py-3 space-y-2">
       {/* 헤더: 종목 + 종료 버튼 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground text-sm">BTCUSDT</span>
+          <span className="font-medium text-foreground text-sm">{trade.symbol}</span>
           <span
             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
               trade.position_type === "LONG"
@@ -279,7 +282,7 @@ function PositionCard({ trade }: { trade: Trade }) {
           <span className="text-muted-foreground">현재가</span>
           <span className="text-foreground tabular-nums">
             {priceReady ? (
-              `$${fmtUsd(currentPrice)}`
+              `$${fmtUsd(tradePrice)}`
             ) : (
               <PriceSkeleton className="w-16 h-3.5" />
             )}
@@ -337,7 +340,7 @@ function PendingOrderRow({ order }: { order: LimitOrder }) {
     <tr className="border-b border-border/50 hover:bg-accent/20 transition-colors">
       <td className="py-2.5 px-3">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground text-sm">BTCUSDT</span>
+          <span className="font-medium text-foreground text-sm">{order.symbol}</span>
           <span
             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
               order.position_type === "LONG"
@@ -413,7 +416,7 @@ function PendingOrderCard({ order }: { order: LimitOrder }) {
       {/* 헤더: 종목 + 취소 버튼 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground text-sm">BTCUSDT</span>
+          <span className="font-medium text-foreground text-sm">{order.symbol}</span>
           <span
             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
               order.position_type === "LONG"

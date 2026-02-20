@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
-import { BarChart3, BookOpen } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { useSearch, useNavigate } from "@tanstack/react-router";
+import { BarChart3, BookOpen, ChevronDown } from "lucide-react";
 import TradingChart from "@/components/TradingChart";
 import OrderBook from "@/components/OrderBook";
 import TradingPanel from "@/components/TradingPanel";
 import PositionsPanel from "@/components/PositionsPanel";
-import { useTradingStore } from "@/store/tradingStore";
+import { useTradingStore, SYMBOLS } from "@/store/tradingStore";
+import type { SymbolId } from "@/store/tradingStore";
 import { useAuthStore } from "@/store/authStore";
+import { indexRoute } from "@/routes/index";
 
 // ── 현재가 표시 (독립 컴포넌트로 분리 → 가격 변동 시 이것만 리렌더) ──
 function PriceDisplay() {
@@ -20,6 +23,96 @@ function PriceDisplay() {
           })}`
         : "불러오는 중..."}
     </p>
+  );
+}
+
+const SYMBOL_LIST = Object.values(SYMBOLS);
+const ICON_COLORS: Record<SymbolId, string> = {
+  BTCUSDT: "bg-orange-500/20 text-orange-400",
+  ETHUSDT: "bg-indigo-500/20 text-indigo-400",
+};
+
+function SymbolBar() {
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const setSelectedSymbol = useTradingStore((s) => s.setSelectedSymbol);
+  const navigate = useNavigate();
+  const info = SYMBOLS[selectedSymbol];
+
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const handleSelect = (sym: SymbolId) => {
+    setSelectedSymbol(sym);
+    navigate({ to: "/", search: { symbol: sym }, replace: true });
+    setOpen(false);
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-3 sm:gap-6 bg-card border border-border rounded-xl px-3 sm:px-5 py-2.5 sm:py-3">
+      <div className="relative" ref={dropdownRef}>
+        <button
+          onClick={() => setOpen((p) => !p)}
+          className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-80 transition-opacity"
+        >
+          <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold ${ICON_COLORS[selectedSymbol]}`}>
+            {info.icon}
+          </div>
+          <div className="text-left">
+            <div className="flex items-center gap-1">
+              <h2 className="text-sm sm:text-base font-bold text-foreground leading-tight">
+                {info.label}
+              </h2>
+              <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+            </div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              바이낸스 · 선물
+            </p>
+          </div>
+        </button>
+
+        {open && (
+          <div className="absolute top-full left-0 mt-1.5 z-50 w-48 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
+            {SYMBOL_LIST.map((sym) => (
+              <button
+                key={sym.id}
+                onClick={() => handleSelect(sym.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-secondary transition-colors cursor-pointer ${
+                  selectedSymbol === sym.id ? "bg-secondary/60" : ""
+                }`}
+              >
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${ICON_COLORS[sym.id]}`}>
+                  {sym.icon}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{sym.label}</p>
+                  <p className="text-[10px] text-muted-foreground">{sym.id}</p>
+                </div>
+                {selectedSymbol === sym.id && (
+                  <span className="ml-auto text-indigo-400 text-xs">✓</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="h-7 sm:h-8 w-px bg-border" />
+
+      <div>
+        <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">현재가</p>
+        <PriceDisplay />
+      </div>
+    </div>
   );
 }
 
@@ -75,6 +168,17 @@ export default function HomePage() {
   const fetchOpenPositions = useTradingStore((s) => s.fetchOpenPositions);
   const fetchClosedTrades = useTradingStore((s) => s.fetchClosedTrades);
   const fetchPendingOrders = useTradingStore((s) => s.fetchPendingOrders);
+  const setSelectedSymbol = useTradingStore((s) => s.setSelectedSymbol);
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+
+  const { symbol: urlSymbol } = useSearch({ from: indexRoute.id });
+
+  // URL searchParams → store 동기화 (마운트 및 URL 변경 시)
+  useEffect(() => {
+    if (urlSymbol && urlSymbol !== selectedSymbol) {
+      setSelectedSymbol(urlSymbol);
+    }
+  }, [urlSymbol]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 유저 데이터 로드
   useEffect(() => {
@@ -95,33 +199,7 @@ export default function HomePage() {
   return (
     <main className="flex-1 w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col gap-2 sm:gap-4">
       {/* ── 상단 종목 정보 바 ── */}
-      <div className="flex items-center gap-3 sm:gap-6 bg-card border border-border rounded-xl px-3 sm:px-5 py-2.5 sm:py-3">
-        {/* 심볼 */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 text-xs sm:text-sm font-bold">
-            ₿
-          </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-foreground leading-tight">
-              BTC/USDT
-            </h2>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              바이낸스 · 선물
-            </p>
-          </div>
-        </div>
-
-        {/* 구분선 */}
-        <div className="h-7 sm:h-8 w-px bg-border" />
-
-        {/* 현재가 — 독립 컴포넌트 */}
-        <div>
-          <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">
-            현재가
-          </p>
-          <PriceDisplay />
-        </div>
-      </div>
+      <SymbolBar />
 
       {/* ── 차트 + 호가창 + 주문 패널 ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_180px_320px] gap-2 sm:gap-4 flex-1">

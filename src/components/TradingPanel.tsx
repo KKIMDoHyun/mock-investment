@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import {
   useTradingStore,
+  SYMBOLS,
   MARKET_FEE_RATE,
   LIMIT_FEE_RATE,
   calcFee,
@@ -33,6 +34,9 @@ export default function TradingPanel() {
   const navigate = useNavigate();
 
   const currentPrice = useTradingStore((s) => s.currentPrice);
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const symbolInfo = SYMBOLS[selectedSymbol];
+  const prices = useTradingStore((s) => s.prices);
   const balance = useTradingStore((s) => s.balance);
   const refillTickets = useTradingStore((s) => s.refillTickets);
   const positions = useTradingStore((s) => s.positions);
@@ -44,11 +48,12 @@ export default function TradingPanel() {
 
   const equity = useMemo(() => {
     const positionValue = positions.reduce((sum, pos) => {
-      const { pnl } = calcPnl(pos, currentPrice);
+      const p = prices[pos.symbol] || 0;
+      const { pnl } = calcPnl(pos, p);
       return sum + pos.margin + pnl;
     }, 0);
     return balance + positionValue;
-  }, [balance, positions, currentPrice]);
+  }, [balance, positions, prices]);
   // orderBookPrice는 subscribe로 직접 구독 (아래 effect 참고)
 
   // 오늘 이미 출석체크 했는지 판별
@@ -354,11 +359,13 @@ export default function TradingPanel() {
       {/* ── 현재가 ── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 sm:w-7 sm:h-7 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 text-[10px] sm:text-xs font-bold">
-            ₿
+          <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold ${
+            selectedSymbol === "BTCUSDT" ? "bg-orange-500/20 text-orange-400" : "bg-indigo-500/20 text-indigo-400"
+          }`}>
+            {symbolInfo.icon}
           </div>
           <span className="text-xs sm:text-sm font-medium text-foreground">
-            BTC/USDT
+            {symbolInfo.label}
           </span>
         </div>
         <p className="text-xs sm:text-sm font-semibold text-foreground tabular-nums">
