@@ -9,6 +9,7 @@ import {
   Trophy,
   Volume2,
   VolumeOff,
+  MessageSquare,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useOnlineCount } from "@/hooks/useOnlineCount";
@@ -90,6 +91,13 @@ export default function Header() {
               >
                 <Trophy className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">랭킹</span>
+              </Link>
+              <Link
+                to="/community"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">커뮤니티</span>
               </Link>
             </nav>
           )}

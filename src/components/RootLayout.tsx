@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Outlet } from "@tanstack/react-router";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import {
   startPriceStream,
@@ -9,6 +9,7 @@ import {
   SYMBOLS,
 } from "@/store/tradingStore";
 import type { SymbolId } from "@/store/tradingStore";
+import { supabase } from "@/lib/supabase";
 import Header from "@/components/Header";
 import NicknameSetupModal from "@/components/NicknameSetupModal";
 import TermsAgreementModal from "@/components/TermsAgreementModal";
@@ -39,6 +40,68 @@ export default function RootLayout() {
     startPriceStream();
     return () => stopPriceStream();
   }, []);
+
+  // ── 댓글 알림 실시간 구독 ──
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel("comment-notifications")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "comments" },
+        async (payload) => {
+          const row = payload.new as {
+            id: string;
+            post_id: string;
+            user_id: string;
+            parent_id: string | null;
+            content: string;
+          };
+
+          // 내가 작성한 댓글은 무시
+          if (row.user_id === user.id) return;
+
+          // 닉네임 조회
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("nickname")
+            .eq("id", row.user_id)
+            .single();
+          const nickname = (profile?.nickname as string) ?? "누군가";
+
+          // 1) 대댓글인 경우: 부모 댓글이 내 것인지 확인
+          if (row.parent_id) {
+            const { data: parentComment } = await supabase
+              .from("comments")
+              .select("user_id")
+              .eq("id", row.parent_id)
+              .single();
+
+            if (parentComment?.user_id === user.id) {
+              toast.info(`${nickname}님이 회원님의 댓글에 답글을 남겼습니다.`);
+              return;
+            }
+          }
+
+          // 2) 내가 작성한 게시글에 댓글이 달린 경우
+          const { data: post } = await supabase
+            .from("posts")
+            .select("user_id")
+            .eq("id", row.post_id)
+            .single();
+
+          if (post?.user_id === user.id) {
+            toast.info(`${nickname}님이 회원님의 글에 댓글을 남겼습니다.`);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   useEffect(() => {
     if (loading || prefetchedRef.current) return;
