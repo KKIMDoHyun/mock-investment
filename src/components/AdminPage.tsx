@@ -8,6 +8,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Ticket,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -30,6 +31,7 @@ interface UserRow {
   nickname: string;
   role: string;
   balance: number;
+  refillTickets: number;
 }
 
 type SortKey = "email" | "balance";
@@ -48,12 +50,20 @@ function UserCard({
   onGrantInputChange,
   onGrant,
   granting,
+  ticketInput,
+  onTicketInputChange,
+  onGrantTicket,
+  grantingTicket,
 }: {
   user: UserRow;
   grantInput: string;
   onGrantInputChange: (value: string) => void;
   onGrant: () => void;
   granting: boolean;
+  ticketInput: string;
+  onTicketInputChange: (value: string) => void;
+  onGrantTicket: () => void;
+  grantingTicket: boolean;
 }) {
   return (
     <div className="border-b border-border/50 px-4 py-3 space-y-2.5">
@@ -90,6 +100,17 @@ function UserCard({
         </span>
       </div>
 
+      {/* 리필권 */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <Ticket className="h-3 w-3 text-amber-400" />
+          리필권
+        </span>
+        <span className="text-sm font-bold text-foreground tabular-nums">
+          {user.refillTickets}개
+        </span>
+      </div>
+
       {/* 자산 지급 */}
       <div className="flex items-center gap-2">
         <Input
@@ -112,6 +133,29 @@ function UserCard({
           지급
         </Button>
       </div>
+
+      {/* 리필권 지급 */}
+      <div className="flex items-center gap-2">
+        <Input
+          type="text"
+          placeholder="리필권 수량"
+          value={ticketInput}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            onTicketInputChange(e.target.value.replace(/[^0-9]/g, ""))
+          }
+          className="h-8 flex-1 text-sm tabular-nums"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onGrantTicket}
+          disabled={grantingTicket}
+          className="h-8 gap-1.5 text-amber-400 border-amber-500/30 hover:bg-amber-500/10 shrink-0"
+        >
+          <Ticket className="h-3.5 w-3.5" />
+          지급
+        </Button>
+      </div>
     </div>
   );
 }
@@ -126,6 +170,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [grantInputs, setGrantInputs] = useState<Record<string, string>>({});
   const [granting, setGranting] = useState<Record<string, boolean>>({});
+  const [ticketInputs, setTicketInputs] = useState<Record<string, string>>({});
+  const [grantingTicket, setGrantingTicket] = useState<Record<string, boolean>>({});
 
   // ── 검색 ──
   const [searchQuery, setSearchQuery] = useState("");
@@ -156,15 +202,17 @@ export default function AdminPage() {
 
     const { data: portfolios, error: portfoliosErr } = await supabase
       .from("portfolios")
-      .select("user_id, balance");
+      .select("user_id, balance, refill_tickets");
 
     if (portfoliosErr) {
       console.error("포트폴리오 조회 에러:", portfoliosErr.message);
     }
 
     const balanceMap = new Map<string, number>();
+    const ticketMap = new Map<string, number>();
     for (const p of portfolios ?? []) {
       balanceMap.set(p.user_id as string, toNum(p.balance));
+      ticketMap.set(p.user_id as string, toNum(p.refill_tickets));
     }
 
     return (profiles ?? []).map((p) => ({
@@ -173,6 +221,7 @@ export default function AdminPage() {
       nickname: (p.nickname as string) ?? "",
       role: (p.role as string) ?? "user",
       balance: balanceMap.get(p.id as string) ?? 0,
+      refillTickets: ticketMap.get(p.id as string) ?? 0,
     }));
   }, []);
 
@@ -306,11 +355,69 @@ export default function AdminPage() {
         `$${amount.toLocaleString()} USDT를 성공적으로 지급했습니다.`
       );
 
-      setGrantInputs((prev) => ({ ...prev, [targetUserId]: "" }));
-      setGranting((prev) => ({ ...prev, [targetUserId]: false }));
-      await fetchUsers();
+    setGrantInputs((prev) => ({ ...prev, [targetUserId]: "" }));
+    setGranting((prev) => ({ ...prev, [targetUserId]: false }));
+    await fetchUsers();
     },
     [grantInputs, fetchUsers]
+  );
+
+  // ── 리필권 지급 ──
+  const handleGrantTicket = useCallback(
+    async (targetUserId: string) => {
+      const amountStr = ticketInputs[targetUserId];
+      const amount = parseInt(amountStr, 10);
+
+      if (!amountStr || isNaN(amount) || amount <= 0) {
+        toast.error("올바른 수량을 입력해주세요.");
+        return;
+      }
+
+      setGrantingTicket((prev) => ({ ...prev, [targetUserId]: true }));
+
+      const { data: portfolio, error: fetchErr } = await supabase
+        .from("portfolios")
+        .select("refill_tickets")
+        .eq("user_id", targetUserId)
+        .single();
+
+      if (fetchErr && fetchErr.code === "PGRST116") {
+        const { error: insertErr } = await supabase.from("portfolios").insert({
+          user_id: targetUserId,
+          balance: 0,
+          total_principal: 0,
+          refill_tickets: amount,
+        });
+
+        if (insertErr) {
+          toast.error(`리필권 지급 실패: ${insertErr.message}`);
+          setGrantingTicket((prev) => ({ ...prev, [targetUserId]: false }));
+          return;
+        }
+      } else if (fetchErr) {
+        toast.error(`조회 실패: ${fetchErr.message}`);
+        setGrantingTicket((prev) => ({ ...prev, [targetUserId]: false }));
+        return;
+      } else {
+        const currentTickets = toNum(portfolio?.refill_tickets);
+        const { error: updateErr } = await supabase
+          .from("portfolios")
+          .update({ refill_tickets: currentTickets + amount })
+          .eq("user_id", targetUserId);
+
+        if (updateErr) {
+          toast.error(`리필권 지급 실패: ${updateErr.message}`);
+          setGrantingTicket((prev) => ({ ...prev, [targetUserId]: false }));
+          return;
+        }
+      }
+
+      toast.success(`리필권 ${amount}개를 성공적으로 지급했습니다.`);
+      setTicketInputs((prev) => ({ ...prev, [targetUserId]: "" }));
+      setGrantingTicket((prev) => ({ ...prev, [targetUserId]: false }));
+      await fetchUsers();
+    },
+    [ticketInputs, fetchUsers]
   );
 
   // ── 정렬 아이콘 렌더 함수 ──
@@ -449,13 +556,15 @@ export default function AdminPage() {
                     {renderSortIcon("balance")}
                   </button>
                 </TableHead>
-                <TableHead className="w-[280px]">자산 지급</TableHead>
+                <TableHead className="w-[100px] text-center">리필권</TableHead>
+                <TableHead className="w-[220px]">자산 지급</TableHead>
+                <TableHead className="w-[220px]">리필권 지급</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12">
+                  <TableCell colSpan={7} className="text-center py-12">
                     <div className="flex items-center justify-center gap-2 text-muted-foreground">
                       <RefreshCw className="h-4 w-4 animate-spin" />
                       불러오는 중...
@@ -465,7 +574,7 @@ export default function AdminPage() {
               ) : filteredAndSortedUsers.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={7}
                     className="text-center py-12 text-muted-foreground"
                   >
                     {searchQuery
@@ -498,6 +607,12 @@ export default function AdminPage() {
                         maximumFractionDigits: 2,
                       })}
                     </TableCell>
+                    <TableCell className="text-center tabular-nums font-semibold">
+                      <span className="flex items-center justify-center gap-1">
+                        <Ticket className="h-3.5 w-3.5 text-amber-400" />
+                        {u.refillTickets}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Input
@@ -510,7 +625,7 @@ export default function AdminPage() {
                               [u.id]: e.target.value.replace(/[^0-9.]/g, ""),
                             }))
                           }
-                          className="h-8 w-32 text-sm tabular-nums"
+                          className="h-8 w-28 text-sm tabular-nums"
                         />
                         <Button
                           size="sm"
@@ -520,6 +635,32 @@ export default function AdminPage() {
                           className="h-8 gap-1.5 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
                         >
                           <Send className="h-3.5 w-3.5" />
+                          지급
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          placeholder="수량"
+                          value={ticketInputs[u.id] ?? ""}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setTicketInputs((prev) => ({
+                              ...prev,
+                              [u.id]: e.target.value.replace(/[^0-9]/g, ""),
+                            }))
+                          }
+                          className="h-8 w-20 text-sm tabular-nums"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleGrantTicket(u.id)}
+                          disabled={grantingTicket[u.id]}
+                          className="h-8 gap-1.5 text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                        >
+                          <Ticket className="h-3.5 w-3.5" />
                           지급
                         </Button>
                       </div>
@@ -582,6 +723,12 @@ export default function AdminPage() {
                 }
                 onGrant={() => handleGrant(u.id)}
                 granting={granting[u.id] ?? false}
+                ticketInput={ticketInputs[u.id] ?? ""}
+                onTicketInputChange={(value) =>
+                  setTicketInputs((prev) => ({ ...prev, [u.id]: value }))
+                }
+                onGrantTicket={() => handleGrantTicket(u.id)}
+                grantingTicket={grantingTicket[u.id] ?? false}
               />
             ))
           )}

@@ -58,6 +58,8 @@ interface TradingState {
   currentPrice: number;
   /** 유저 잔고 (USDT) */
   balance: number;
+  /** 리필권 보유 수 */
+  refillTickets: number;
   /** OPEN 상태인 포지션 목록 */
   positions: Trade[];
   /** CLOSED 포지션 목록 (거래 내역) */
@@ -74,8 +76,14 @@ interface TradingState {
   /** Supabase에서 포트폴리오(잔고) 가져오기 */
   fetchPortfolio: (userId: string) => Promise<void>;
 
-  /** 출석체크 보상 (1,000,000 포인트) */
+  /** 출석체크 보상 (리필권 1개 지급) */
   claimAttendance: (userId: string) => Promise<{
+    success: boolean;
+    message: string;
+  }>;
+
+  /** 리필권 사용 (balance < 1,000,000 && refillTickets > 0) */
+  useRefillTicket: (userId: string) => Promise<{
     success: boolean;
     message: string;
   }>;
@@ -628,6 +636,7 @@ export function calcPnl(
 export const useTradingStore = create<TradingState>((set, get) => ({
   currentPrice: 0,
   balance: 0,
+  refillTickets: 0,
   positions: [],
   closedTrades: [],
   pendingOrders: [],
@@ -643,16 +652,15 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   fetchPortfolio: async (userId) => {
     const { data, error } = await supabase
       .from("portfolios")
-      .select("balance, last_attendance_date")
+      .select("balance, last_attendance_date, refill_tickets")
       .eq("user_id", userId)
       .single();
 
     if (error && error.code === "PGRST116") {
-      // 행이 없으면 새로 생성
       const { data: newRow, error: insertErr } = await supabase
         .from("portfolios")
-        .insert({ user_id: userId, balance: 0, total_principal: 0 })
-        .select("balance, last_attendance_date")
+        .insert({ user_id: userId, balance: 0, total_principal: 0, refill_tickets: 0 })
+        .select("balance, last_attendance_date, refill_tickets")
         .single();
 
       if (insertErr) {
@@ -662,6 +670,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       if (newRow) {
         set({
           balance: toNum(newRow.balance),
+          refillTickets: toNum(newRow.refill_tickets),
           lastAttendanceDate: newRow.last_attendance_date,
         });
       }
@@ -676,71 +685,99 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     if (data) {
       set({
         balance: toNum(data.balance),
+        refillTickets: toNum(data.refill_tickets),
         lastAttendanceDate: data.last_attendance_date,
       });
     }
   },
 
-  // ── 출석체크 보상 ──
+  // ── 출석체크 보상 (리필권 1개 지급) ──
   claimAttendance: async (userId) => {
     const today = getTodayKST();
-    const { lastAttendanceDate } = get();
+    const { lastAttendanceDate, refillTickets } = get();
 
     if (lastAttendanceDate === today) {
       return { success: false, message: "내일 다시 와주세요! 🕐" };
     }
 
-    const { data, error } = await supabase.rpc("claim_attendance", {
-      p_user_id: userId,
-      p_today: today,
-      p_reward: 1000000,
-    });
+    const { data: curPortfolio } = await supabase
+      .from("portfolios")
+      .select("refill_tickets")
+      .eq("user_id", userId)
+      .single();
 
-    if (error) {
-      // RPC가 없으면 직접 업데이트
-      const { balance } = get();
-      const newBalance = balance + 1000000;
+    const curTickets = Number(curPortfolio?.refill_tickets) || refillTickets;
 
-      // 현재 total_principal 조회
-      const { data: curPortfolio } = await supabase
-        .from("portfolios")
-        .select("total_principal")
-        .eq("user_id", userId)
-        .single();
-      const curPrincipal = Number(curPortfolio?.total_principal) || 0;
+    const { error: updateErr } = await supabase
+      .from("portfolios")
+      .update({
+        refill_tickets: curTickets + 1,
+        last_attendance_date: today,
+      })
+      .eq("user_id", userId);
 
-      const { error: updateErr } = await supabase
-        .from("portfolios")
-        .update({
-          balance: newBalance,
-          total_principal: curPrincipal + 1000000,
-          last_attendance_date: today,
-        })
-        .eq("user_id", userId);
-
-      if (updateErr) {
-        return { success: false, message: `에러: ${updateErr.message}` };
-      }
-
-      set({ balance: newBalance, lastAttendanceDate: today });
-      playCheckSound();
-      return {
-        success: true,
-        message: "💰 1,000,000 포인트를 받았습니다!",
-      };
+    if (updateErr) {
+      return { success: false, message: `에러: ${updateErr.message}` };
     }
 
-    if (data === false) {
-      set({ lastAttendanceDate: today });
-      return { success: false, message: "내일 다시 와주세요! 🕐" };
-    }
-
-    // 성공 시 잔고 갱신
-    await get().fetchPortfolio(userId);
+    set({ refillTickets: curTickets + 1, lastAttendanceDate: today });
     playCheckSound();
     return {
       success: true,
-      message: "💰 1,000,000 포인트를 받았습니다!",
+      message: "🎟️ 출석 완료! 리필권 1개가 지급되었습니다.",
+    };
+  },
+
+  // ── 리필권 사용 ──
+  useRefillTicket: async (userId) => {
+    const { balance, refillTickets } = get();
+
+    if (refillTickets <= 0) {
+      return { success: false, message: "보유한 리필권이 없습니다." };
+    }
+    if (balance >= 1_000_000) {
+      return { success: false, message: "잔고가 1,000,000 이상이면 리필권을 사용할 수 없습니다." };
+    }
+
+    const { data: curPortfolio } = await supabase
+      .from("portfolios")
+      .select("balance, total_principal, refill_tickets")
+      .eq("user_id", userId)
+      .single();
+
+    if (!curPortfolio) {
+      return { success: false, message: "포트폴리오를 찾을 수 없습니다." };
+    }
+
+    const dbBalance = toNum(curPortfolio.balance);
+    const dbPrincipal = toNum(curPortfolio.total_principal);
+    const dbTickets = toNum(curPortfolio.refill_tickets);
+
+    if (dbTickets <= 0) {
+      return { success: false, message: "보유한 리필권이 없습니다." };
+    }
+
+    const { error: updateErr } = await supabase
+      .from("portfolios")
+      .update({
+        balance: dbBalance + 1_000_000,
+        total_principal: dbPrincipal + 1_000_000,
+        refill_tickets: dbTickets - 1,
+      })
+      .eq("user_id", userId);
+
+    if (updateErr) {
+      return { success: false, message: `에러: ${updateErr.message}` };
+    }
+
+    set({
+      balance: dbBalance + 1_000_000,
+      refillTickets: dbTickets - 1,
+    });
+    playSuccessSound();
+    return {
+      success: true,
+      message: "🎟️ 리필권이 사용되었습니다! (1,000,000 지급)",
     };
   },
 

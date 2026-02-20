@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { TrendingUp, TrendingDown, Gift, Check } from "lucide-react";
+import { TrendingUp, TrendingDown, Gift, Check, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import {
@@ -33,8 +33,10 @@ export default function TradingPanel() {
 
   const currentPrice = useTradingStore((s) => s.currentPrice);
   const balance = useTradingStore((s) => s.balance);
+  const refillTickets = useTradingStore((s) => s.refillTickets);
   const lastAttendanceDate = useTradingStore((s) => s.lastAttendanceDate);
   const claimAttendance = useTradingStore((s) => s.claimAttendance);
+  const useRefillTicket = useTradingStore((s) => s.useRefillTicket);
   const openPosition = useTradingStore((s) => s.openPosition);
   const submitLimitOrder = useTradingStore((s) => s.submitLimitOrder);
   // orderBookPrice는 subscribe로 직접 구독 (아래 effect 참고)
@@ -105,6 +107,20 @@ export default function TradingPanel() {
       toast.info(result.message);
     }
   }, [user, claimAttendance]);
+
+  // 리필권 사용
+  const [refilling, setRefilling] = useState(false);
+  const handleRefill = useCallback(async () => {
+    if (!user) return;
+    setRefilling(true);
+    const result = await useRefillTicket(user.id);
+    if (result.success) {
+      toast.success(result.message);
+    } else {
+      toast.error(result.message);
+    }
+    setRefilling(false);
+  }, [user, useRefillTicket]);
 
   // 비율 버튼 (수수료 역산 적용)
   // maxMargin = balance / (1 + leverage * feeRate) → 수수료 포함해도 잔고 초과 안 함
@@ -261,42 +277,65 @@ export default function TradingPanel() {
 
   return (
     <div className="bg-card border border-border rounded-xl p-3 sm:p-5 flex flex-col gap-3 sm:gap-4">
-      {/* ── 잔고 + 출석체크 ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">
-            잔고 (USDT)
-          </p>
-          <p className="text-base sm:text-lg font-bold text-foreground tabular-nums">
-            $
-            {balance.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-          </p>
+      {/* ── 잔고 + 리필권 + 출석체크 ── */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">
+              잔고 (USDT)
+            </p>
+            <p className="text-base sm:text-lg font-bold text-foreground tabular-nums">
+              $
+              {balance.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
+          </div>
+          {user && (
+            <button
+              onClick={handleAttendance}
+              disabled={alreadyClaimed}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
+                alreadyClaimed
+                  ? "bg-emerald-500/10 text-emerald-400/60 cursor-default"
+                  : "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 cursor-pointer"
+              }`}
+            >
+              {alreadyClaimed ? (
+                <>
+                  <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  출석 완료
+                </>
+              ) : (
+                <>
+                  <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  출석체크
+                </>
+              )}
+            </button>
+          )}
         </div>
         {user && (
-          <button
-            onClick={handleAttendance}
-            disabled={alreadyClaimed}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
-              alreadyClaimed
-                ? "bg-emerald-500/10 text-emerald-400/60 cursor-default"
-                : "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 cursor-pointer"
-            }`}
-          >
-            {alreadyClaimed ? (
-              <>
-                <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                출석 완료
-              </>
-            ) : (
-              <>
-                <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                출석체크
-              </>
-            )}
-          </button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-muted-foreground">
+              <Ticket className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-400" />
+              리필권
+              <span className="font-bold text-foreground">{refillTickets}개</span>
+            </div>
+            <button
+              onClick={handleRefill}
+              disabled={refilling || balance >= 1_000_000 || refillTickets <= 0}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
+                balance < 1_000_000 && refillTickets > 0
+                  ? "bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 cursor-pointer"
+                  : "bg-secondary text-muted-foreground/50 cursor-not-allowed"
+              }`}
+            >
+              <Ticket className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              리필하기
+            </button>
+          </div>
         )}
       </div>
 
