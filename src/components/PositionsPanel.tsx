@@ -616,9 +616,9 @@ function HistoryTable() {
   return (
     <div>
       {/* 데스크탑 테이블 */}
-      <div className="hidden md:block overflow-x-auto">
+      <div className="hidden md:block overflow-x-auto max-h-[245px] overflow-y-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-card">
             <tr className="text-xs text-muted-foreground border-b border-border">
               <th className="text-left py-2.5 px-3 font-medium">종료 일시</th>
               <th className="text-left py-2.5 px-3 font-medium">포지션</th>
@@ -678,7 +678,7 @@ function HistoryTable() {
       </div>
 
       {/* 모바일 카드 */}
-      <div className="md:hidden">
+      <div className="md:hidden max-h-[420px] overflow-y-auto">
         {closedTrades.map((trade) => {
           const closePrice = trade.close_price ?? 0;
           const { pnl } = calcPnl(trade, closePrice);
