@@ -19,20 +19,14 @@ const TIMEFRAMES = [
   { label: "1월", interval: "1M" },
 ];
 
-// ── Binance API 엔드포인트 헬퍼 ──
-function getRestUrl(interval: string): string {
-  // 1초는 현물 API (선물은 1s 미지원)
-  if (interval === "1s") {
-    return `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1s&limit=500`;
-  }
-  return `https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=${interval}&limit=500`;
+// ── Binance API 엔드포인트 헬퍼 (현물 API — 2017년부터 데이터 제공) ──
+function getRestUrl(interval: string, endTime?: number): string {
+  const base = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=500`;
+  return endTime ? `${base}&endTime=${endTime}` : base;
 }
 
 function getWsUrl(interval: string): string {
-  if (interval === "1s") {
-    return `wss://stream.binance.com:9443/ws/btcusdt@kline_1s`;
-  }
-  return `wss://fstream.binance.com/ws/btcusdt@kline_${interval}`;
+  return `wss://stream.binance.com:9443/ws/btcusdt@kline_${interval}`;
 }
 
 // ══════════════════════════════════════════
@@ -52,6 +46,26 @@ function ViewChart({ timeframe }: { timeframe: string }) {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+
+    type Candle = {
+      time: UTCTimestamp;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+    };
+    let allCandles: Candle[] = [];
+    let isLoadingMore = false;
+    let hasMoreData = true;
+
+    const parseCandles = (data: (string | number)[][]): Candle[] =>
+      data.map((k) => ({
+        time: (Number(k[0]) / 1000) as UTCTimestamp,
+        open: parseFloat(String(k[1])),
+        high: parseFloat(String(k[2])),
+        low: parseFloat(String(k[3])),
+        close: parseFloat(String(k[4])),
+      }));
 
     const chart = createChart(container, {
       width: container.clientWidth,
@@ -88,21 +102,57 @@ function ViewChart({ timeframe }: { timeframe: string }) {
     });
     seriesRef.current = series;
 
+    // ── 과거 데이터 추가 로드 (왼쪽 스크롤 시) ──
+    const loadMoreHistory = async () => {
+      if (isLoadingMore || !hasMoreData || allCandles.length === 0) return;
+      isLoadingMore = true;
+
+      const earliestTime = allCandles[0].time as number;
+      const endTime = earliestTime * 1000 - 1;
+
+      try {
+        const res = await fetch(getRestUrl(timeframe, endTime));
+        const data = await res.json();
+        const newCandles = parseCandles(data as (string | number)[][]);
+
+        if (newCandles.length === 0) {
+          hasMoreData = false;
+        } else {
+          const visibleRange = chart.timeScale().getVisibleRange();
+          allCandles = [...newCandles, ...allCandles];
+          series.setData(allCandles);
+          if (visibleRange) {
+            chart.timeScale().setVisibleRange(visibleRange);
+          }
+          if (newCandles.length < 500) {
+            hasMoreData = false;
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        isLoadingMore = false;
+      }
+    };
+
     // 히스토리 데이터 로드
     fetch(getRestUrl(timeframe))
       .then((r) => r.json())
       .then((data: unknown[]) => {
-        const candles = (data as (string | number)[][]).map((k) => ({
-          time: (Number(k[0]) / 1000) as UTCTimestamp,
-          open: parseFloat(String(k[1])),
-          high: parseFloat(String(k[2])),
-          low: parseFloat(String(k[3])),
-          close: parseFloat(String(k[4])),
-        }));
+        const candles = parseCandles(data as (string | number)[][]);
+        allCandles = candles;
         series.setData(candles);
         chart.timeScale().fitContent();
       })
       .catch(() => {});
+
+    // 스크롤 시 과거 데이터 자동 로드
+    chart.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
+      if (!logicalRange) return;
+      if (logicalRange.from < 10) {
+        loadMoreHistory();
+      }
+    });
 
     // 실시간 캔들 WebSocket
     let ws: WebSocket | null = new WebSocket(getWsUrl(timeframe));
@@ -112,13 +162,23 @@ function ViewChart({ timeframe }: { timeframe: string }) {
         const msg = JSON.parse(ev.data as string);
         const k = msg.k;
         if (!k) return;
-        series.update({
+        const candle: Candle = {
           time: (k.t / 1000) as UTCTimestamp,
           open: parseFloat(k.o),
           high: parseFloat(k.h),
           low: parseFloat(k.l),
           close: parseFloat(k.c),
-        });
+        };
+        series.update(candle);
+
+        if (allCandles.length > 0) {
+          const last = allCandles[allCandles.length - 1];
+          if (last.time === candle.time) {
+            allCandles[allCandles.length - 1] = candle;
+          } else if ((candle.time as number) > (last.time as number)) {
+            allCandles.push(candle);
+          }
+        }
       } catch {
         // ignore
       }
@@ -129,7 +189,6 @@ function ViewChart({ timeframe }: { timeframe: string }) {
     chart.subscribeClick((param) => {
       if (!param.point) return;
       try {
-        // y 좌표 → 가격 변환
         const price = series.coordinateToPrice(param.point.y);
         if (price !== null && Number.isFinite(price) && price > 0) {
           useTradingStore
@@ -137,7 +196,6 @@ function ViewChart({ timeframe }: { timeframe: string }) {
             .setOrderBookPrice(Math.round(price * 100) / 100);
         }
       } catch {
-        // coordinateToPrice 미지원 시: 클릭한 캔들의 종가 사용
         const data = param.seriesData?.get(series);
         if (data && "close" in data) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -12,24 +12,18 @@ import {
  * 인앱 브라우저가 아니면 아무것도 렌더링하지 않습니다.
  */
 export default function InAppBrowserGuard() {
-  const [info, setInfo] = useState<InAppBrowserInfo | null>(null);
+  const [info] = useState<InAppBrowserInfo | null>(() => {
+    const detected = detectInAppBrowser();
+    return detected.isInApp ? detected : null;
+  });
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    const detected = detectInAppBrowser();
-    if (detected.isInApp) {
-      setInfo(detected);
-
-      // 안드로이드인 경우 자동으로 Chrome intent 시도
-      if (detected.isAndroid) {
-        // 약간의 딜레이 후 intent 시도 (UI를 먼저 보여주기 위해)
-        const timer = setTimeout(() => {
-          openInChrome();
-        }, 1500);
-        return () => clearTimeout(timer);
-      }
+    if (info?.isAndroid) {
+      const timer = setTimeout(() => openInChrome(), 1500);
+      return () => clearTimeout(timer);
     }
-  }, []);
+  }, [info]);
 
   // 인앱 브라우저가 아니거나 유저가 닫은 경우
   if (!info || dismissed) return null;

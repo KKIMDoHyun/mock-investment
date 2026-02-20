@@ -22,11 +22,12 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // nickname이 비동기로 로드될 수 있으므로, 최초 로드 시 한 번만 동기화
-  const initializedRef = useRef(false);
-  if (nickname && !initializedRef.current && newNickname === "") {
-    initializedRef.current = true;
-    setNewNickname(nickname);
-  }
+  useEffect(() => {
+    if (nickname && newNickname === "") {
+      setNewNickname(nickname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nickname]);
 
   // 비로그인 → 홈으로
   useEffect(() => {

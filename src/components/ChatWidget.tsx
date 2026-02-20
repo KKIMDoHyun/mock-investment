@@ -455,6 +455,10 @@ export default function ChatWidget() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isOpenRef = useRef(isOpen);
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
 
   // ── 즉시 스크롤 (맨 아래로) ──
   const scrollToBottom = useCallback((instant = false) => {
@@ -505,8 +509,6 @@ export default function ChatWidget() {
   // ── 채팅창 열릴 때 로드 ──
   useEffect(() => {
     if (!isOpen) return;
-
-    setUnreadCount(0);
 
     if (!loaded) {
       loadMessages().then(() => scrollToBottom(true));
@@ -567,6 +569,14 @@ export default function ChatWidget() {
           };
 
           setMessages((prev) => [...prev, newMsg]);
+
+          if (isOpenRef.current) {
+            requestAnimationFrame(() => {
+              messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            });
+          } else {
+            setUnreadCount((prev) => prev + 1);
+          }
         }
       )
       .on(
@@ -583,21 +593,6 @@ export default function ChatWidget() {
       supabase.removeChannel(channel);
     };
   }, []);
-
-  // 새 메시지 올 때: 열려있으면 스크롤, 닫혀있으면 카운트++
-  const prevLengthRef = useRef(messages.length);
-  useEffect(() => {
-    if (messages.length > prevLengthRef.current) {
-      if (isOpen) {
-        scrollToBottom(false);
-      } else {
-        setUnreadCount(
-          (prev) => prev + (messages.length - prevLengthRef.current)
-        );
-      }
-    }
-    prevLengthRef.current = messages.length;
-  }, [messages.length, isOpen, scrollToBottom]);
 
   // ── 일반 메시지 전송 ──
   const handleSend = useCallback(async () => {
@@ -683,7 +678,12 @@ export default function ChatWidget() {
       {/* ── 채팅 버튼 ── */}
       <button
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          setIsOpen((prev) => {
+            if (!prev) setUnreadCount(0);
+            return !prev;
+          });
+        }}
         className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full shadow-lg shadow-indigo-500/30 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform"
       >
         {isOpen ? (

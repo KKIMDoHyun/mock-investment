@@ -37,8 +37,7 @@ export default function TradingPanel() {
   const claimAttendance = useTradingStore((s) => s.claimAttendance);
   const openPosition = useTradingStore((s) => s.openPosition);
   const submitLimitOrder = useTradingStore((s) => s.submitLimitOrder);
-  const orderBookPrice = useTradingStore((s) => s.orderBookPrice);
-  const setOrderBookPrice = useTradingStore((s) => s.setOrderBookPrice);
+  // orderBookPrice는 subscribe로 직접 구독 (아래 effect 참고)
 
   // 오늘 이미 출석체크 했는지 판별
   const todayKST = (() => {
@@ -59,35 +58,42 @@ export default function TradingPanel() {
   // 지정가 입력 ref (flash animation용)
   const limitPriceRef = useRef<HTMLInputElement>(null);
 
-  // ── 호가창 / 차트 가격 클릭 → 지정가 자동 입력 ──
+  // ── 호가창 / 차트 가격 클릭 → 지정가 자동 입력 (store 구독) ──
   useEffect(() => {
-    if (orderBookPrice == null) return;
+    let timer: ReturnType<typeof setTimeout>;
 
-    // 1) 지정가 탭으로 전환 + 가격 입력
-    setOrderType("limit");
-    setLimitPriceInput(
-      orderBookPrice.toLocaleString("en-US", {
-        maximumFractionDigits: 2,
-        useGrouping: false,
-      })
-    );
+    const unsub = useTradingStore.subscribe((state, prev) => {
+      if (state.orderBookPrice != null && state.orderBookPrice !== prev.orderBookPrice) {
+        const price = state.orderBookPrice;
 
-    // 2) 소비 후 초기화
-    setOrderBookPrice(null);
+        setOrderType("limit");
+        setLimitPriceInput(
+          price.toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+            useGrouping: false,
+          })
+        );
 
-    // 3) 반짝이는 애니메이션 (탭 전환 렌더 후 실행되도록 지연)
-    const timer = setTimeout(() => {
-      const el = limitPriceRef.current;
-      if (el) {
-        el.classList.remove("price-flash");
-        void el.offsetWidth; // reflow
-        el.classList.add("price-flash");
-        el.focus();
+        useTradingStore.getState().setOrderBookPrice(null);
+
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          const el = limitPriceRef.current;
+          if (el) {
+            el.classList.remove("price-flash");
+            void el.offsetWidth; // reflow
+            el.classList.add("price-flash");
+            el.focus();
+          }
+        }, 60);
       }
-    }, 60);
+    });
 
-    return () => clearTimeout(timer);
-  }, [orderBookPrice, setOrderBookPrice]);
+    return () => {
+      unsub();
+      clearTimeout(timer);
+    };
+  }, []);
 
   // 출석체크
   const handleAttendance = useCallback(async () => {
