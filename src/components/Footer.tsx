@@ -46,11 +46,20 @@ export default function Footer() {
           {/* 우측: 링크 + 후원 */}
           <div className="flex items-center gap-1 order-1 sm:order-2 flex-wrap justify-center sm:justify-end">
             <Shield className="h-3 w-3 text-muted-foreground/40 mr-1" />
-            <FooterLink to="/privacy">개인정보처리방침</FooterLink>
+            <FooterLink to="/privacy">
+              <span>개인정보처리방침</span>
+              <span className="hidden sm:inline text-muted-foreground/30 ml-0.5">· Privacy Policy</span>
+            </FooterLink>
             <Divider />
-            <FooterLink to="/terms">이용약관</FooterLink>
+            <FooterLink to="/terms">
+              <span>이용약관</span>
+              <span className="hidden sm:inline text-muted-foreground/30 ml-0.5">· Terms</span>
+            </FooterLink>
             <Divider />
-            <FooterLink to="/contact">문의하기</FooterLink>
+            <FooterLink to="/contact">
+              <span>문의하기</span>
+              <span className="hidden sm:inline text-muted-foreground/30 ml-0.5">· Contact</span>
+            </FooterLink>
             <Divider />
             <DonationButton />
           </div>
@@ -65,7 +74,7 @@ function FooterLink({ to, children }: { to: string; children: React.ReactNode })
   return (
     <Link
       to={to}
-      className="text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors no-underline px-1"
+      className="flex items-center text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors no-underline px-1"
     >
       {children}
     </Link>

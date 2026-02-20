@@ -1,35 +1,69 @@
 <!DOCTYPE html>
 <html lang="ko">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- DNS prefetch / preconnect (Supabase, Google Fonts) -->
+    <link rel="preconnect" href="https://supabase.co" />
+    <link rel="dns-prefetch" href="https://supabase.co" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- 파비콘 -->
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+
+    <!-- SEO 기본 메타 -->
+    <title>모두모투 | 암호화폐 모의투자 시뮬레이션</title>
+    <meta name="description" content="실전 같은 가상 암호화폐 모의투자. 비트코인·이더리움 레버리지 거래, 수익률 랭킹, 트레이더 커뮤니티까지 무료로 즐기세요." />
+    <meta name="keywords" content="암호화폐 모의투자, 비트코인 시뮬레이션, 가상투자, 레버리지 연습, 선물거래 입문" />
     <meta name="robots" content="index, follow" />
+    <meta name="author" content="모두모투" />
+    <link rel="canonical" href="https://modumotu.com/" />
+
+    <!-- 네이버 서치어드바이저 -->
     <meta name="naver-site-verification" content="5fc7ff56070448a5f978fbae443e638df9cbcf48" />
+
+    <!-- 사이트맵 -->
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta
-      property="og:title"
-      content="모두모투 | 모의투자로 실전 감각을 키우세요"
-    />
-    <meta
-      property="og:description"
-      content="실전 같은 가상 투자. 수익률 경쟁. 지금 바로 시작하세요."
-    />
+    <meta property="og:title" content="모두모투 | 암호화폐 모의투자 시뮬레이션" />
+    <meta property="og:description" content="실전 같은 가상 암호화폐 투자. 수익률 경쟁, 커뮤니티, 실시간 시세. 지금 바로 시작하세요." />
     <meta property="og:image" content="https://modumotu.com/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="모두모투 암호화폐 모의투자 플랫폼 스크린샷" />
     <meta property="og:url" content="https://modumotu.com" />
     <meta property="og:site_name" content="모두모투" />
+    <meta property="og:locale" content="ko_KR" />
 
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="모두모투" />
-    <meta
-      name="twitter:description"
-      content="모의투자로 실전 감각을 키우세요."
-    />
+    <meta name="twitter:title" content="모두모투 | 암호화폐 모의투자" />
+    <meta name="twitter:description" content="실전 같은 가상 암호화폐 모의투자. 무료로 시작하세요." />
     <meta name="twitter:image" content="https://modumotu.com/og-image.png" />
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/logo.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>모두모투</title>
+
+    <!-- 구조화 데이터 (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "모두모투",
+      "url": "https://modumotu.com",
+      "description": "암호화폐 모의투자 시뮬레이션 게임. 비트코인·이더리움을 가상 자금으로 거래하며 실전 감각을 키우세요.",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "KRW"
+      },
+      "inLanguage": "ko"
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
