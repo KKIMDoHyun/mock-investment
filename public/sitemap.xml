@@ -39,7 +39,31 @@
     <priority>0.4</priority>
   </url>
 
-  <!-- 커뮤니티 게시글 (21개) -->
+  <!-- 커뮤니티 게시글 (25개) -->
+  <url>
+    <loc>https://modumotu.com/community/1e00b42d-7ae8-4f44-b26d-947cf0de4195</loc>
+    <lastmod>2026-02-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://modumotu.com/community/f1721010-7701-4e93-92b3-9458940283d4</loc>
+    <lastmod>2026-02-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://modumotu.com/community/59e4e6b5-1f68-431b-96ff-ffa30aa105bc</loc>
+    <lastmod>2026-02-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://modumotu.com/community/7fa937ae-4b6f-4a4d-924f-d9affe121b21</loc>
+    <lastmod>2026-02-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
   <url>
     <loc>https://modumotu.com/community/f7d078f3-cfec-4065-949f-ab6fcf92cab8</loc>
     <lastmod>2026-02-20</lastmod>

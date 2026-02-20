@@ -47,3 +47,7 @@ export function playErrorSound(): void {
 export function playCheckSound(): void {
   play("/sounds/check.mp3");
 }
+
+export function playNotificationSound(): void {
+  play("/sounds/notification.mp3");
+}

@@ -10,10 +10,12 @@ import {
   Volume2,
   VolumeOff,
   MessageSquare,
+  Bell,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useOnlineCount } from "@/hooks/useOnlineCount";
 import { getSoundEnabled, setSoundEnabled } from "@/lib/sound";
+import { useNotificationStore } from "@/store/notificationStore";
 import { Button } from "@/ui/button";
 import {
   DropdownMenu,
@@ -32,6 +34,8 @@ export default function Header() {
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const signOut = useAuthStore((s) => s.signOut);
   const onlineCount = useOnlineCount();
+
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
 
   const [soundOn, setSoundOn] = useState(getSoundEnabled);
   const toggleSound = useCallback(() => {
@@ -113,6 +117,22 @@ export default function Header() {
             )}
           </button>
 
+          {/* 알림 벨 (로그인 시만 표시) */}
+          {user && (
+            <Link
+              to="/settings"
+              className="relative p-1.5 sm:p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
+              title="알림 설정"
+            >
+              <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] font-bold text-white leading-none">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Link>
+          )}
+
           {user ? (
             /* 로그인 상태: 유저 드롭다운 */
             <DropdownMenu>
@@ -169,6 +189,17 @@ export default function Header() {
                   <Link to="/profile" className="cursor-pointer">
                     <UserCog className="mr-2 h-4 w-4" />
                     <span>내 정보</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/settings" className="cursor-pointer">
+                    <Bell className="mr-2 h-4 w-4" />
+                    <span>알림 설정</span>
+                    {unreadCount > 0 && (
+                      <span className="ml-auto bg-indigo-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                        {unreadCount}
+                      </span>
+                    )}
                   </Link>
                 </DropdownMenuItem>
                 {role === "admin" && (

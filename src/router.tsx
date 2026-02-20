@@ -10,12 +10,14 @@ import { communityPostRoute } from "./routes/communityPost";
 import { privacyRoute } from "./routes/privacy";
 import { termsRoute } from "./routes/terms";
 import { contactRoute } from "./routes/contact";
+import { settingsRoute } from "./routes/settings";
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   adminRoute,
   profileRoute,
+  settingsRoute,
   rankingRoute,
   communityRoute,
   communityPostRoute,

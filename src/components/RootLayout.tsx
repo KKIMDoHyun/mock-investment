@@ -18,6 +18,10 @@ import ChatWidget from "@/components/ChatWidget";
 import InAppBrowserGuard from "@/components/InAppBrowserGuard";
 import SplashScreen from "@/components/SplashScreen";
 import { Seo } from "@/hooks/useSeo";
+import { requestNotificationPermission, showNotification } from "@/lib/notification";
+import { useNotificationStore } from "@/store/notificationStore";
+import { useNotification } from "@/hooks/useNotification";
+import { playNotificationSound } from "@/lib/sound";
 
 const MIN_SPLASH_MS = 2000;
 
@@ -27,6 +31,9 @@ export default function RootLayout() {
   const user = useAuthStore((s) => s.user);
   const [isAppReady, setIsAppReady] = useState(false);
   const prefetchedRef = useRef(false);
+
+  // notifications 테이블 Realtime 구독 (외부 알림 수신 + unreadCount 갱신)
+  useNotification(user?.id);
 
   useEffect(() => {
     const cleanup = initialize();
@@ -42,6 +49,22 @@ export default function RootLayout() {
     startPriceStream();
     return () => stopPriceStream();
   }, []);
+
+  // ── 알림 스토어 초기화 (로그인 시) ──
+  useEffect(() => {
+    if (!user) {
+      useNotificationStore.getState().reset();
+      return;
+    }
+    useNotificationStore.getState().fetchNotifications(user.id);
+    useNotificationStore.getState().fetchSettings(user.id);
+
+    // 앱 준비 후 3초 뒤 브라우저 알림 권한 요청 (UX 방해 최소화)
+    const timer = setTimeout(() => {
+      requestNotificationPermission();
+    }, 3_000);
+    return () => clearTimeout(timer);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 댓글 알림 실시간 구독 ──
   useEffect(() => {
@@ -64,7 +87,11 @@ export default function RootLayout() {
           // 내가 작성한 댓글은 무시
           if (row.user_id === user.id) return;
 
-          // 닉네임 조회
+          // notify_comments 설정 확인
+          const { settings } = useNotificationStore.getState();
+          if (!settings.notify_comments) return;
+
+          // 작성자 닉네임 조회
           const { data: profile } = await supabase
             .from("profiles")
             .select("nickname")
@@ -72,7 +99,7 @@ export default function RootLayout() {
             .single();
           const nickname = (profile?.nickname as string) ?? "누군가";
 
-          // 1) 대댓글인 경우: 부모 댓글이 내 것인지 확인
+          // 1) 대댓글: 부모 댓글이 내 것인지 확인
           if (row.parent_id) {
             const { data: parentComment } = await supabase
               .from("comments")
@@ -81,12 +108,36 @@ export default function RootLayout() {
               .single();
 
             if (parentComment?.user_id === user.id) {
-              toast.info(`${nickname}님이 회원님의 댓글에 답글을 남겼습니다.`);
+              const title = `${nickname}님이 답글을 남겼습니다`;
+              const body = row.content.slice(0, 80);
+              const link = `/community/${row.post_id}`;
+
+              // DB 저장 (locallyCreatedIds에 UUID 등록 → 훅의 Realtime 이벤트에서 이중 표시 방지)
+              await useNotificationStore.getState().saveNotification({
+                userId: user.id,
+                type: "reply",
+                title,
+                body,
+                link,
+              });
+
+              // 직접 표시 (saveNotification이 로컬 상태는 이미 업데이트하므로 UI만 처리)
+              const { settings } = useNotificationStore.getState();
+              if (settings.sound_enabled) playNotificationSound();
+
+              if (document.visibilityState === "hidden") {
+                showNotification(title, body, undefined, link);
+              } else {
+                toast.info(title, {
+                  description: body,
+                  action: { label: "보러가기", onClick: () => { window.location.href = link; } },
+                });
+              }
               return;
             }
           }
 
-          // 2) 내가 작성한 게시글에 댓글이 달린 경우
+          // 2) 내 게시글에 새 댓글
           const { data: post } = await supabase
             .from("posts")
             .select("user_id")
@@ -94,7 +145,29 @@ export default function RootLayout() {
             .single();
 
           if (post?.user_id === user.id) {
-            toast.info(`${nickname}님이 회원님의 글에 댓글을 남겼습니다.`);
+            const title = `${nickname}님이 댓글을 남겼습니다`;
+            const body = row.content.slice(0, 80);
+            const link = `/community/${row.post_id}`;
+
+            await useNotificationStore.getState().saveNotification({
+              userId: user.id,
+              type: "comment",
+              title,
+              body,
+              link,
+            });
+
+            const { settings } = useNotificationStore.getState();
+            if (settings.sound_enabled) playNotificationSound();
+
+            if (document.visibilityState === "hidden") {
+              showNotification(title, body, undefined, link);
+            } else {
+              toast.info(title, {
+                description: body,
+                action: { label: "보러가기", onClick: () => { window.location.href = link; } },
+              });
+            }
           }
         }
       )

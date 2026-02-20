@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { playSuccessSound, playErrorSound, playCheckSound } from "@/lib/sound";
+import { showNotification } from "@/lib/notification";
+import { useNotificationStore } from "@/store/notificationStore";
+import { useAuthStore } from "@/store/authStore";
 
 // ── 시스템 메시지 (채팅 공지) ──
 
@@ -481,17 +484,40 @@ async function checkLiquidation(symbol: SymbolId, currentPrice: number) {
           .closePosition(trade.id, liqPrice, "liquidation");
 
         if (result.success) {
-          toast.error(
-            `⚠️ 강제 청산! ${trade.position_type} ${
-              trade.leverage
-            }x @ $${liqPrice.toLocaleString(undefined, {
-              maximumFractionDigits: 2,
-            })} — 증거금 $${trade.margin.toLocaleString(undefined, {
-              maximumFractionDigits: 2,
-            })} 전액 손실`,
-            { duration: 10000 }
-          );
-          playErrorSound();
+          const symLabel = SYMBOLS[trade.symbol]?.label ?? trade.symbol;
+          const liqFmt = liqPrice.toLocaleString(undefined, { maximumFractionDigits: 2 });
+          const marginFmt = trade.margin.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+          const { settings, saveNotification } = useNotificationStore.getState();
+          const userId = useAuthStore.getState().user?.id;
+
+          if (settings.notify_positions) {
+            const notifTitle = `[모두모투] ⚠️ 강제 청산`;
+            const notifBody = `${symLabel} ${trade.position_type} ${trade.leverage}x — $${liqFmt} 도달, 증거금 $${marginFmt} 전액 손실`;
+
+            toast.error(
+              `⚠️ 강제 청산! ${trade.position_type} ${trade.leverage}x @ $${liqFmt} — 증거금 $${marginFmt} 전액 손실`,
+              { duration: 10000 }
+            );
+            playErrorSound();
+            showNotification(notifTitle, notifBody, trade.symbol);
+
+            if (userId) {
+              saveNotification({
+                userId,
+                type: "liquidation",
+                title: notifTitle,
+                body: notifBody,
+                link: `/?symbol=${trade.symbol}`,
+              });
+            }
+          } else {
+            toast.error(
+              `⚠️ 강제 청산! ${trade.position_type} ${trade.leverage}x @ $${liqFmt} — 증거금 $${marginFmt} 전액 손실`,
+              { duration: 10000 }
+            );
+            playErrorSound();
+          }
         }
       }
     }
@@ -545,12 +571,40 @@ async function checkTpSlPositions(symbol: SymbolId, currentPrice: number) {
           .getState()
           .closePosition(trade.id, closePrice, "tp_sl");
         if (result.success) {
-          toast.info(
-            `${reason} 체결! ${trade.position_type} ${
-              trade.leverage
-            }x @ $${closePrice.toLocaleString()}`
-          );
-          playSuccessSound();
+          const symLabel = SYMBOLS[trade.symbol]?.label ?? trade.symbol;
+          const closeFmt = closePrice.toLocaleString(undefined, { maximumFractionDigits: 2 });
+          const isTP = reason.includes("TP");
+
+          const { settings, saveNotification } = useNotificationStore.getState();
+          const userId = useAuthStore.getState().user?.id;
+
+          if (settings.notify_positions) {
+            const notifTitle = isTP
+              ? `[모두모투] 🎯 익절 체결!`
+              : `[모두모투] 🛑 손절 체결`;
+            const notifBody = `${symLabel} ${trade.position_type} ${trade.leverage}x — $${closeFmt}에 ${isTP ? "익절" : "손절"} 완료`;
+
+            toast.info(
+              `${reason} 체결! ${trade.position_type} ${trade.leverage}x @ $${closeFmt}`
+            );
+            playSuccessSound();
+            showNotification(notifTitle, notifBody, trade.symbol);
+
+            if (userId) {
+              saveNotification({
+                userId,
+                type: isTP ? "tp" : "sl",
+                title: notifTitle,
+                body: notifBody,
+                link: `/?symbol=${trade.symbol}`,
+              });
+            }
+          } else {
+            toast.info(
+              `${reason} 체결! ${trade.position_type} ${trade.leverage}x @ $${closeFmt}`
+            );
+            playSuccessSound();
+          }
         }
       }
     }
