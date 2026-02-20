@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { playSuccessSound, playErrorSound, playCheckSound } from "@/lib/sound";
 
 // ── 수수료율 상수 ──
 
@@ -333,6 +334,7 @@ async function checkAndFillPendingOrders(currentPrice: number) {
             order.leverage
           }x 지정가 체결 (물타기)! @ $${order.limit_price.toLocaleString()}`
         );
+        playSuccessSound();
         if (result.hasTpSl) {
           toast.info("📊 평단가가 변경되었습니다. TP/SL을 확인해주세요.");
         }
@@ -348,6 +350,7 @@ async function checkAndFillPendingOrders(currentPrice: number) {
             order.leverage
           }x 지정가 체결! @ $${order.limit_price.toLocaleString()}`
         );
+        playSuccessSound();
       }
     }
   } finally {
@@ -398,6 +401,7 @@ async function checkLiquidation(currentPrice: number) {
             })} 전액 손실`,
             { duration: 10000 }
           );
+          playErrorSound();
         }
       }
     }
@@ -456,6 +460,7 @@ async function checkTpSlPositions(currentPrice: number) {
               trade.leverage
             }x @ $${closePrice.toLocaleString()}`
           );
+          playSuccessSound();
         }
       }
     }
@@ -718,6 +723,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       }
 
       set({ balance: newBalance, lastAttendanceDate: today });
+      playCheckSound();
       return {
         success: true,
         message: "💰 1,000,000 포인트를 받았습니다!",
@@ -731,6 +737,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
     // 성공 시 잔고 갱신
     await get().fetchPortfolio(userId);
+    playCheckSound();
     return {
       success: true,
       message: "💰 1,000,000 포인트를 받았습니다!",
@@ -882,6 +889,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
         toast.info("📊 평단가가 변경되었습니다. TP/SL을 확인해주세요.");
       }
 
+      playSuccessSound();
       return {
         success: true,
         message: `${positionType} ${leverage}x 물타기 완료! 평단: $${result.trade.entry_price.toLocaleString(
@@ -896,6 +904,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
         positions: [result.trade!, ...state.positions],
       }));
 
+      playSuccessSound();
       return {
         success: true,
         message: `${positionType} ${leverage}x 포지션 오픈! (수수료: $${fee.toFixed(
@@ -1060,6 +1069,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       pendingOrders: [order, ...s.pendingOrders],
     }));
 
+    playSuccessSound();
     return {
       success: true,
       message: `${positionType} ${leverage}x 지정가 주문 등록! @ $${limitPrice.toLocaleString()} 📝`,

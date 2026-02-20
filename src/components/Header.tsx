@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   LogOut,
@@ -6,9 +7,12 @@ import {
   Shield,
   UserCog,
   Trophy,
+  Volume2,
+  VolumeOff,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useOnlineCount } from "@/hooks/useOnlineCount";
+import { getSoundEnabled, setSoundEnabled } from "@/lib/sound";
 import { Button } from "@/ui/button";
 import {
   DropdownMenu,
@@ -27,6 +31,15 @@ export default function Header() {
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const signOut = useAuthStore((s) => s.signOut);
   const onlineCount = useOnlineCount();
+
+  const [soundOn, setSoundOn] = useState(getSoundEnabled);
+  const toggleSound = useCallback(() => {
+    setSoundOn((prev) => {
+      const next = !prev;
+      setSoundEnabled(next);
+      return next;
+    });
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
@@ -63,6 +76,20 @@ export default function Header() {
           </div>
 
           {/* Auth area */}
+          <div className="flex items-center gap-1 sm:gap-1.5">
+          {/* 사운드 토글 */}
+          <button
+            onClick={toggleSound}
+            className="p-1.5 sm:p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            title={soundOn ? "사운드 끄기" : "사운드 켜기"}
+          >
+            {soundOn ? (
+              <Volume2 className="h-4 w-4" />
+            ) : (
+              <VolumeOff className="h-4 w-4" />
+            )}
+          </button>
+
           {user ? (
             /* 로그인 상태: 유저 드롭다운 */
             <DropdownMenu>
@@ -181,6 +208,7 @@ export default function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          </div>
         </div>
       </div>
     </header>

@@ -25,12 +25,12 @@ const DEFAULT_FAVORITES = ["1m", "5m", "15m", "1h", "1d"];
 
 // ── Binance API 엔드포인트 헬퍼 (현물 API — 2017년부터 데이터 제공) ──
 function getRestUrl(interval: string, endTime?: number): string {
-  const base = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=500`;
+  const base = `https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=${interval}&limit=500`;
   return endTime ? `${base}&endTime=${endTime}` : base;
 }
 
 function getWsUrl(interval: string): string {
-  return `wss://stream.binance.com:9443/ws/btcusdt@kline_${interval}`;
+  return `wss://fstream.binance.com/ws/btcusdt@kline_${interval}`;
 }
 
 // ══════════════════════════════════════════
