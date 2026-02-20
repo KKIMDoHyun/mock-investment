@@ -750,13 +750,20 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   // ── 리필권 사용 ──
   useRefillTicket: async (userId) => {
-    const { balance, refillTickets } = get();
+    const { balance, refillTickets, positions, currentPrice } = get();
 
     if (refillTickets <= 0) {
       return { success: false, message: "보유한 리필권이 없습니다." };
     }
-    if (balance >= 1_000_000) {
-      return { success: false, message: "잔고가 1,000,000 이상이면 리필권을 사용할 수 없습니다." };
+
+    const positionValue = positions.reduce((sum, pos) => {
+      const { pnl } = calcPnl(pos, currentPrice);
+      return sum + pos.margin + pnl;
+    }, 0);
+    const equity = balance + positionValue;
+
+    if (equity >= 500_000) {
+      return { success: false, message: "아직 자산이 충분합니다. (포지션 포함 50만 달러 이상)" };
     }
 
     const { data: curPortfolio } = await supabase
@@ -780,8 +787,8 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     const { error: updateErr } = await supabase
       .from("portfolios")
       .update({
-        balance: dbBalance + 1_000_000,
-        total_principal: dbPrincipal + 1_000_000,
+        balance: dbBalance + 500_000,
+        total_principal: dbPrincipal + 500_000,
         refill_tickets: dbTickets - 1,
       })
       .eq("user_id", userId);
@@ -791,13 +798,13 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     }
 
     set({
-      balance: dbBalance + 1_000_000,
+      balance: dbBalance + 500_000,
       refillTickets: dbTickets - 1,
     });
     playSuccessSound();
     return {
       success: true,
-      message: "🎟️ 리필권이 사용되었습니다! (1,000,000 지급)",
+      message: "🎟️ 리필권이 사용되었습니다! (500,000 지급)",
     };
   },
 

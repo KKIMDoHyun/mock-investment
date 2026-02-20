@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { TrendingUp, TrendingDown, Gift, Check, Ticket } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import {
   MARKET_FEE_RATE,
   LIMIT_FEE_RATE,
   calcFee,
+  calcPnl,
 } from "@/store/tradingStore";
 import { Button } from "@/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/ui/tabs";
@@ -34,11 +35,20 @@ export default function TradingPanel() {
   const currentPrice = useTradingStore((s) => s.currentPrice);
   const balance = useTradingStore((s) => s.balance);
   const refillTickets = useTradingStore((s) => s.refillTickets);
+  const positions = useTradingStore((s) => s.positions);
   const lastAttendanceDate = useTradingStore((s) => s.lastAttendanceDate);
   const claimAttendance = useTradingStore((s) => s.claimAttendance);
   const useRefillTicket = useTradingStore((s) => s.useRefillTicket);
   const openPosition = useTradingStore((s) => s.openPosition);
   const submitLimitOrder = useTradingStore((s) => s.submitLimitOrder);
+
+  const equity = useMemo(() => {
+    const positionValue = positions.reduce((sum, pos) => {
+      const { pnl } = calcPnl(pos, currentPrice);
+      return sum + pos.margin + pnl;
+    }, 0);
+    return balance + positionValue;
+  }, [balance, positions, currentPrice]);
   // orderBookPrice는 subscribe로 직접 구독 (아래 effect 참고)
 
   // 오늘 이미 출석체크 했는지 판별
@@ -325,9 +335,9 @@ export default function TradingPanel() {
             </div>
             <button
               onClick={handleRefill}
-              disabled={refilling || balance >= 1_000_000 || refillTickets <= 0}
+              disabled={refilling || equity >= 500_000 || refillTickets <= 0}
               className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                balance < 1_000_000 && refillTickets > 0 && !refilling
+                equity < 500_000 && refillTickets > 0 && !refilling
                   ? "bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 cursor-pointer"
                   : "bg-secondary text-muted-foreground/50 cursor-not-allowed pointer-events-none"
               }`}

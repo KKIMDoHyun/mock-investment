@@ -2,6 +2,22 @@ import { useState, useEffect, useCallback } from "react";
 import { Trophy, Loader2, TrendingUp, DollarSign, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
+// ── PnL 계산 (tradingStore의 calcPnl과 동일 로직, 순환 의존 방지를 위해 인라인) ──
+function calcUnrealizedPnl(
+  positionType: "LONG" | "SHORT",
+  entryPrice: number,
+  leverage: number,
+  margin: number,
+  currentPrice: number
+): number {
+  if (entryPrice <= 0 || currentPrice <= 0 || leverage <= 0 || margin <= 0) return 0;
+  const pnl =
+    positionType === "LONG"
+      ? ((currentPrice - entryPrice) / entryPrice) * leverage * margin
+      : ((entryPrice - currentPrice) / entryPrice) * leverage * margin;
+  return Number.isFinite(pnl) ? pnl : 0;
+}
+
 // ── 타입 ──
 type Period = "daily" | "weekly" | "monthly";
 
@@ -10,6 +26,7 @@ interface RankedUser {
   nickname: string;
   avatarUrl: string | null;
   balance: number;
+  equity: number;
   totalPrincipal: number;
   profit: number | null;
   roe: number | null;
@@ -18,6 +35,7 @@ interface RankedUser {
 interface PortfolioRow {
   userId: string;
   balance: number;
+  equity: number;
   totalPrincipal: number;
   nickname: string;
   avatarUrl: string | null;
@@ -243,14 +261,14 @@ function RoeRankingTable({ users }: { users: PortfolioRow[] }) {
     const ids = users.map((u) => u.userId);
     const snapMap = await fetchSnapshotMap(date, ids);
 
-    // 순수 수익 계산:
-    // 현재 순수 누적 수익 = balance - totalPrincipal
+    // 순수 수익 계산 (equity 기반):
+    // 현재 순수 누적 수익 = equity - totalPrincipal (포지션 미실현 손익 포함)
     // 과거 스냅샷 순수 수익 = snap.totalAssets - snap.totalPrincipal
     // 기간별 수익금 = 현재 순수 누적 수익 - 과거 스냅샷 순수 수익
     // 기간별 수익률 = 기간별 수익금 / snap.totalAssets * 100
     const ranked: RankedUser[] = users.map((u) => {
       const snap = snapMap.get(u.userId)!;
-      const currentPureProfit = u.balance - u.totalPrincipal;
+      const currentPureProfit = u.equity - u.totalPrincipal;
       const pastPureProfit = snap.totalAssets - snap.totalPrincipal;
       const periodProfit = currentPureProfit - pastPureProfit;
       const periodRoe =
@@ -341,7 +359,7 @@ function ProfitRankingTable({ users }: { users: PortfolioRow[] }) {
 
     const ranked: RankedUser[] = users.map((u) => {
       const snap = snapMap.get(u.userId)!;
-      const currentPureProfit = u.balance - u.totalPrincipal;
+      const currentPureProfit = u.equity - u.totalPrincipal;
       const pastPureProfit = snap.totalAssets - snap.totalPrincipal;
       const periodProfit = currentPureProfit - pastPureProfit;
       const periodRoe =
@@ -426,7 +444,7 @@ function TotalRankingTable({ users }: { users: PortfolioRow[] }) {
           <h2 className="text-sm font-semibold text-foreground">총자산 랭킹</h2>
         </div>
         <span className="text-[10px] sm:text-[11px] text-muted-foreground bg-secondary/60 px-2 py-1 rounded-md">
-          현재 기준
+          순자산(포지션 포함)
         </span>
       </div>
 
@@ -444,7 +462,7 @@ function TotalRankingTable({ users }: { users: PortfolioRow[] }) {
             return (
               <RankRow key={user.userId} rank={rank} user={rankedUser}>
                 <span className="text-xs sm:text-sm font-semibold tabular-nums text-foreground">
-                  ${fmtUsd(user.balance)}
+                  ${fmtUsd(user.equity)}
                 </span>
               </RankRow>
             );
@@ -534,39 +552,75 @@ export default function RankingPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetch = async () => {
-      const { data, error } = await supabase
+    const fetchData = async () => {
+      // 1) 포트폴리오 + 프로필 조회
+      const { data: portfolioData, error: portfolioErr } = await supabase
         .from("portfolios")
         .select(
           "user_id, balance, total_principal, profiles(nickname, avatar_url)"
-        )
-        .order("balance", { ascending: false });
+        );
 
-      if (error) {
-        console.error("포트폴리오 조회 에러:", error.message);
+      if (portfolioErr) {
+        console.error("포트폴리오 조회 에러:", portfolioErr.message);
         setLoading(false);
         return;
       }
 
-      const rows: PortfolioRow[] = (data ?? []).map((row) => {
+      // 2) 모든 OPEN 포지션 조회
+      const { data: tradesData } = await supabase
+        .from("trades")
+        .select("user_id, position_type, entry_price, leverage, margin")
+        .eq("status", "OPEN");
+
+      // 3) 현재 BTC 가격 조회
+      let btcPrice = 0;
+      try {
+        const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT");
+        const json = await res.json();
+        btcPrice = parseFloat(json.price) || 0;
+      } catch {
+        console.error("BTC 가격 조회 실패");
+      }
+
+      // 4) 유저별 포지션 가치 합산 (margin + pnl)
+      const positionValueMap = new Map<string, number>();
+      for (const t of tradesData ?? []) {
+        const uid = t.user_id as string;
+        const margin = Number(t.margin) || 0;
+        const pnl = calcUnrealizedPnl(
+          t.position_type as "LONG" | "SHORT",
+          Number(t.entry_price) || 0,
+          Number(t.leverage) || 0,
+          margin,
+          btcPrice
+        );
+        positionValueMap.set(uid, (positionValueMap.get(uid) ?? 0) + margin + pnl);
+      }
+
+      // 5) equity 계산 후 정렬
+      const rows: PortfolioRow[] = (portfolioData ?? []).map((row) => {
         const profile = row.profiles as unknown as {
           nickname: string;
           avatar_url: string | null;
         } | null;
+        const balance = Number(row.balance) || 0;
+        const posValue = positionValueMap.get(row.user_id as string) ?? 0;
         return {
           userId: row.user_id as string,
-          balance: Number(row.balance) || 0,
+          balance,
+          equity: balance + posValue,
           totalPrincipal: Number(row.total_principal) || 0,
           nickname: (profile?.nickname as string) ?? "익명",
           avatarUrl: (profile?.avatar_url as string) ?? null,
         };
       });
 
+      rows.sort((a, b) => b.equity - a.equity);
       setUsers(rows);
       setLoading(false);
     };
 
-    fetch();
+    fetchData();
   }, []);
 
   if (loading) {
