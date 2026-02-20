@@ -496,7 +496,7 @@ function PositionsTable() {
   }
 
   return (
-    <>
+    <div>
       {/* 데스크탑 테이블 */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
@@ -528,7 +528,7 @@ function PositionsTable() {
           <PositionCard key={trade.id} trade={trade} />
         ))}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -541,7 +541,7 @@ function PendingOrdersTable() {
   }
 
   return (
-    <>
+    <div>
       {/* 데스크탑 테이블 */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
@@ -570,7 +570,7 @@ function PendingOrdersTable() {
           <PendingOrderCard key={order.id} order={order} />
         ))}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -583,7 +583,7 @@ function HistoryTable() {
   }
 
   return (
-    <>
+    <div>
       {/* 데스크탑 테이블 */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
@@ -707,7 +707,7 @@ function HistoryTable() {
           );
         })}
       </div>
-    </>
+    </div>
   );
 }
 

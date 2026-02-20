@@ -28,6 +28,7 @@ interface ChatMessage {
 
 /** 포지션 공유 메시지 데이터 */
 interface SharedPosition {
+  symbol?: string;
   position_type: "LONG" | "SHORT";
   leverage: number;
   entry_price: number;
@@ -171,7 +172,7 @@ function PositionCard({ data, isMe }: { data: SharedPosition; isMe: boolean }) {
         <div className="flex items-center gap-1.5">
           <TrendingUp className="h-3 w-3" />
           <span>
-            BTC/USDT {data.position_type} {data.leverage}x
+            {data.symbol ? data.symbol.replace("USDT", "/USDT") : "BTC/USDT"} {data.position_type} {data.leverage}x
           </span>
         </div>
         <span className="text-[10px] opacity-70">포지션 공유</span>
@@ -531,19 +532,61 @@ export default function ChatWidget() {
     if (!isOpen) return;
 
     const fetchRanks = async () => {
-      const { data, error } = await supabase
+      // 1) 모든 유저의 잔고 조회
+      const { data: portfolios, error: pErr } = await supabase
         .from("portfolios")
-        .select("user_id, balance")
-        .order("balance", { ascending: false });
+        .select("user_id, balance");
 
-      if (error) {
-        console.error("랭킹 조회 에러:", error.message);
+      if (pErr) {
+        console.error("랭킹 조회 에러:", pErr.message);
         return;
       }
 
+      // 2) 모든 OPEN 포지션 조회
+      const { data: trades } = await supabase
+        .from("trades")
+        .select("user_id, symbol, position_type, entry_price, leverage, margin")
+        .eq("status", "OPEN");
+
+      // 3) 현재 시세 조회
+      const priceMap: Record<string, number> = {};
+      try {
+        const res = await fetch("https://fapi.binance.com/fapi/v1/ticker/price");
+        const json = (await res.json()) as { symbol: string; price: string }[];
+        for (const item of json) {
+          priceMap[item.symbol] = parseFloat(item.price) || 0;
+        }
+      } catch { /* 실패 시 PnL=0으로 처리 */ }
+
+      // 4) 유저별 포지션 가치 합산 (margin + pnl)
+      const posValueMap = new Map<string, number>();
+      for (const t of trades ?? []) {
+        const uid = t.user_id as string;
+        const sym = (t.symbol as string) || "BTCUSDT";
+        const symPrice = priceMap[sym] || 0;
+        const margin = Number(t.margin) || 0;
+        const entry = Number(t.entry_price) || 0;
+        const lev = Number(t.leverage) || 1;
+        let pnl = 0;
+        if (entry > 0 && symPrice > 0) {
+          pnl =
+            t.position_type === "LONG"
+              ? ((symPrice - entry) / entry) * lev * margin
+              : ((entry - symPrice) / entry) * lev * margin;
+        }
+        posValueMap.set(uid, (posValueMap.get(uid) ?? 0) + margin + pnl);
+      }
+
+      // 5) equity 기준 정렬
+      const rows = (portfolios ?? []).map((row) => ({
+        userId: row.user_id as string,
+        equity: (Number(row.balance) || 0) + (posValueMap.get(row.user_id as string) ?? 0),
+      }));
+      rows.sort((a, b) => b.equity - a.equity);
+
       const rankMap = new Map<string, number>();
-      (data ?? []).forEach((row, idx) => {
-        rankMap.set(row.user_id as string, idx + 1);
+      rows.forEach((row, idx) => {
+        rankMap.set(row.userId, idx + 1);
       });
       setUserRanks(rankMap);
     };
@@ -634,11 +677,12 @@ export default function ChatWidget() {
     async (trade: Trade) => {
       if (!user || sending) return;
 
-      // 전송 시점의 최신 가격을 스토어에서 직접 읽기
-      const latestPrice = useTradingStore.getState().currentPrice;
+      // 전송 시점의 최신 가격을 스토어에서 직접 읽기 (심볼별)
+      const latestPrice = useTradingStore.getState().prices[trade.symbol] || useTradingStore.getState().currentPrice;
       const { pnl, roe } = calcPnl(trade, latestPrice);
 
       const positionData: SharedPosition = {
+        symbol: trade.symbol,
         position_type: trade.position_type,
         leverage: trade.leverage,
         entry_price: trade.entry_price,

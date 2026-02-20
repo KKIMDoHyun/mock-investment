@@ -388,6 +388,8 @@ export default function TradingPanel() {
           <TabsTrigger value="limit">지정가</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="market" />
+
         {/* 지정가 → 체결 가격 + TP/SL 입력 */}
         <TabsContent value="limit">
           <div className="mt-2 space-y-2">
@@ -619,7 +621,7 @@ export default function TradingPanel() {
           </div>
           <div className="h-px bg-border/50 my-0.5" />
           {orderType === "market" && (
-            <>
+            <div className="space-y-1">
               <div className="flex justify-between">
                 <span>예상 청산가 (Long)</span>
                 <span className="text-foreground font-medium tabular-nums">
@@ -648,10 +650,10 @@ export default function TradingPanel() {
                     : "—"}
                 </span>
               </div>
-            </>
+            </div>
           )}
           {orderType === "limit" && parseFloat(limitPriceInput) > 0 && (
-            <>
+            <div className="space-y-1">
               <div className="flex justify-between">
                 <span>예상 청산가 (Long)</span>
                 <span className="text-foreground font-medium tabular-nums">
@@ -678,7 +680,7 @@ export default function TradingPanel() {
               </div>
               {(parseFloat(tpPriceInput) > 0 ||
                 parseFloat(slPriceInput) > 0) && (
-                <>
+                <div className="space-y-1">
                   <div className="h-px bg-border/50 my-0.5" />
                   {parseFloat(tpPriceInput) > 0 && (
                     <div className="flex justify-between">
@@ -704,9 +706,9 @@ export default function TradingPanel() {
                       </span>
                     </div>
                   )}
-                </>
+                </div>
               )}
-            </>
+            </div>
           )}
         </div>
       )}
