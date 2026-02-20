@@ -596,9 +596,9 @@ export default function RankingPage() {
       </div>
 
       {/* ── 3개 테이블 ── */}
+      <TotalRankingTable users={users} />
       <RoeRankingTable users={users} />
       <ProfitRankingTable users={users} />
-      <TotalRankingTable users={users} />
     </main>
   );
 }

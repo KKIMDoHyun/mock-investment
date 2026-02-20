@@ -73,6 +73,26 @@ export default function Header() {
               </span>
             </div>
           )}
+
+          {/* 내 정보 / 랭킹 바로가기 */}
+          {user && (
+            <nav className="flex items-center gap-0.5">
+              <Link
+                to="/profile"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
+              >
+                <UserCog className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">내 정보</span>
+              </Link>
+              <Link
+                to="/ranking"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
+              >
+                <Trophy className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">랭킹</span>
+              </Link>
+            </nav>
+          )}
           </div>
 
           {/* Auth area */}
@@ -141,26 +161,16 @@ export default function Header() {
                     </div>
                   </div>
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/profile" className="cursor-pointer">
-                    <UserCog className="mr-2 h-4 w-4" />
-                    <span>내 정보 설정</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/ranking" className="cursor-pointer">
-                    <Trophy className="mr-2 h-4 w-4" />
-                    <span>랭킹 보기</span>
-                  </Link>
-                </DropdownMenuItem>
                 {role === "admin" && (
-                  <DropdownMenuItem asChild>
-                    <Link to="/admin" className="cursor-pointer">
-                      <Shield className="mr-2 h-4 w-4" />
-                      <span>관리자 대시보드</span>
-                    </Link>
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="cursor-pointer">
+                        <Shield className="mr-2 h-4 w-4" />
+                        <span>관리자 대시보드</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={signOut}>
