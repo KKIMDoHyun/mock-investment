@@ -214,30 +214,36 @@ export default function HomePage() {
   return (
     <>
       <Seo url="/" />
-    <main className="flex-1 w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col gap-2 sm:gap-3">
+    <main className="flex-1 w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col gap-2 sm:gap-4">
       {/* ── 상단 종목 정보 바 ── */}
       <SymbolBar />
 
       {/* ── 차트 + 호가창 + 주문 패널 ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_180px_320px] gap-2 sm:gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_180px_320px] gap-2 sm:gap-4">
         {/* 모바일: 차트/호가 탭 전환 */}
         <MobileChartOrderBook />
 
-        {/* 데스크탑: 차트 (항상 보임) */}
-        <div className="hidden lg:flex lg:flex-col bg-card border border-border rounded-xl overflow-hidden"
-             style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}>
+        {/* 데스크탑: 차트 */}
+        <div
+          className="hidden lg:flex lg:flex-col bg-card border border-border rounded-xl overflow-hidden"
+          style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}
+        >
           <TradingChart />
         </div>
 
-        {/* 데스크탑: 호가창 (항상 보임) */}
-        <div className="hidden lg:block overflow-hidden rounded-xl"
-             style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}>
+        {/* 데스크탑: 호가창 */}
+        <div
+          className="hidden lg:block overflow-hidden rounded-xl"
+          style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}
+        >
           <OrderBook />
         </div>
 
         {/* 주문 패널 */}
-        <div className="lg:overflow-y-auto lg:rounded-xl"
-             style={{ maxHeight: "calc(100dvh - 220px)" }}>
+        <div
+          className="lg:rounded-xl lg:overflow-hidden"
+          style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}
+        >
           <TradingPanel />
         </div>
       </div>

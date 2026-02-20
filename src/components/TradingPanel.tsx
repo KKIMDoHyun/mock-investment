@@ -155,7 +155,7 @@ export default function TradingPanel() {
   const feeRate = orderType === "market" ? MARKET_FEE_RATE : LIMIT_FEE_RATE;
   const estimatedFee = calcFee(marginValue, leverage, feeRate);
   const positionSize = marginValue * leverage;
-  const totalCost = marginValue + estimatedFee;
+  // totalCost = marginValue + estimatedFee (미리보기에서 제거됨)
 
   // TP/SL 기준가 및 ROE 계산
   const basePrice = parseFloat(limitPriceInput) || currentPrice;
@@ -291,64 +291,50 @@ export default function TradingPanel() {
   );
 
   return (
-    <div className="bg-card border border-border rounded-xl p-3 sm:p-5 flex flex-col gap-3 sm:gap-4">
+    <div className="bg-card border border-border rounded-xl p-3 flex flex-col gap-2.5">
       {/* ── 잔고 + 리필권 + 출석체크 ── */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">
-              잔고 (USDT)
-            </p>
-            <p className="text-base sm:text-lg font-bold text-foreground tabular-nums">
-              $
-              {balance.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+            <p className="text-[10px] text-muted-foreground mb-0.5">잔고 (USDT)</p>
+            <p className="text-sm font-bold text-foreground tabular-nums">
+              ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>
           {user && (
             <button
               onClick={handleAttendance}
               disabled={alreadyClaimed}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
+              className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-lg transition-colors ${
                 alreadyClaimed
                   ? "bg-emerald-500/10 text-emerald-400/60 cursor-default"
                   : "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 cursor-pointer"
               }`}
             >
               {alreadyClaimed ? (
-                <>
-                  <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                  출석 완료
-                </>
+                <><Check className="h-3 w-3" />출석 완료</>
               ) : (
-                <>
-                  <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                  출석체크
-                </>
+                <><Gift className="h-3 w-3" />출석체크</>
               )}
             </button>
           )}
         </div>
         {user && (
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-muted-foreground">
-              <Ticket className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-400" />
-              리필권
-              <span className="font-bold text-foreground">{refillTickets}개</span>
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Ticket className="h-3 w-3 text-amber-400" />
+              리필권 <span className="font-bold text-foreground">{refillTickets}개</span>
             </div>
             <button
               onClick={handleRefill}
               disabled={refilling || equity >= 500_000 || refillTickets <= 0}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 equity < 500_000 && refillTickets > 0 && !refilling
                   ? "bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 cursor-pointer"
                   : "bg-secondary text-muted-foreground/50 cursor-not-allowed pointer-events-none"
               }`}
             >
-              <Ticket className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              리필하기
+              <Ticket className="h-3 w-3" />리필하기
             </button>
           </div>
         )}
@@ -358,31 +344,23 @@ export default function TradingPanel() {
 
       {/* ── 현재가 ── */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold ${
+        <div className="flex items-center gap-1.5">
+          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
             selectedSymbol === "BTCUSDT" ? "bg-orange-500/20 text-orange-400" : "bg-indigo-500/20 text-indigo-400"
           }`}>
             {symbolInfo.icon}
           </div>
-          <span className="text-xs sm:text-sm font-medium text-foreground">
-            {symbolInfo.label}
-          </span>
+          <span className="text-xs font-medium text-foreground">{symbolInfo.label}</span>
         </div>
-        <p className="text-xs sm:text-sm font-semibold text-foreground tabular-nums">
+        <p className="text-xs font-semibold text-foreground tabular-nums">
           {currentPrice > 0
-            ? `$${currentPrice.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}`
+            ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             : "—"}
         </p>
       </div>
 
       {/* ── 주문 유형 탭 (시장가 / 지정가) ── */}
-      <Tabs
-        value={orderType}
-        onValueChange={(v) => setOrderType(v as OrderType)}
-      >
+      <Tabs value={orderType} onValueChange={(v) => setOrderType(v as OrderType)}>
         <TabsList>
           <TabsTrigger value="market">시장가</TabsTrigger>
           <TabsTrigger value="limit">지정가</TabsTrigger>
@@ -390,123 +368,75 @@ export default function TradingPanel() {
 
         <TabsContent value="market" />
 
-        {/* 지정가 → 체결 가격 + TP/SL 입력 */}
         <TabsContent value="limit">
-          <div className="mt-2 space-y-2">
+          <div className="mt-1.5 space-y-1.5">
             {/* 체결 가격 */}
             <div>
-              <label className="text-[10px] sm:text-xs text-muted-foreground mb-1 block">
-                체결 가격 (USDT)
-              </label>
+              <label className="text-[10px] text-muted-foreground mb-0.5 block">체결 가격 (USDT)</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                  $
-                </span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
                 <input
                   ref={limitPriceRef}
                   type="text"
                   value={addCommas(limitPriceInput)}
-                  onChange={(e) =>
-                    setLimitPriceInput(e.target.value.replace(/[^0-9.]/g, ""))
-                  }
-                  className="w-full bg-secondary border border-border rounded-lg pl-7 pr-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring tabular-nums"
-                  placeholder={
-                    currentPrice > 0
-                      ? currentPrice.toLocaleString(undefined, {
-                          maximumFractionDigits: 2,
-                        })
-                      : "가격 입력"
-                  }
+                  onChange={(e) => setLimitPriceInput(e.target.value.replace(/[^0-9.]/g, ""))}
+                  className="w-full bg-secondary border border-border rounded-lg pl-6 pr-3 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring tabular-nums"
+                  placeholder={currentPrice > 0 ? currentPrice.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "가격 입력"}
                 />
               </div>
             </div>
 
             {/* TP / SL */}
-            <div className="grid grid-cols-2 gap-2">
-              {/* ── TP (익절가) ── */}
+            <div className="grid grid-cols-2 gap-1.5">
               <div>
-                <label className="text-[10px] sm:text-xs text-emerald-400/80 mb-1 block">
-                  TP (익절가)
-                </label>
+                <label className="text-[10px] text-emerald-400/80 mb-0.5 block">TP (익절가)</label>
                 <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                    $
-                  </span>
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">$</span>
                   <input
                     type="text"
                     value={addCommas(tpPriceInput)}
-                    onChange={(e) =>
-                      setTpPriceInput(e.target.value.replace(/[^0-9.]/g, ""))
-                    }
-                    className="w-full bg-secondary border border-border rounded-lg pl-6 pr-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-emerald-500/50 tabular-nums"
+                    onChange={(e) => setTpPriceInput(e.target.value.replace(/[^0-9.]/g, ""))}
+                    className="w-full bg-secondary border border-border rounded-lg pl-5 pr-1.5 py-1.5 text-[10px] text-foreground outline-none focus:ring-1 focus:ring-emerald-500/50 tabular-nums"
                     placeholder="선택"
                   />
                 </div>
-                {/* TP % 프리셋 */}
-                <div className="flex gap-1 mt-1">
+                <div className="flex gap-0.5 mt-0.5">
                   {TP_PRESETS.map((pct) => (
-                    <button
-                      key={pct}
-                      onClick={() => handleTpPercent(pct)}
-                      className="flex-1 text-[10px] py-0.5 rounded bg-emerald-500/10 text-emerald-400/80 hover:bg-emerald-500/20 transition-colors cursor-pointer"
-                    >
+                    <button key={pct} onClick={() => handleTpPercent(pct)}
+                      className="flex-1 text-[9px] py-0.5 rounded bg-emerald-500/10 text-emerald-400/80 hover:bg-emerald-500/20 transition-colors cursor-pointer">
                       +{pct}%
                     </button>
                   ))}
                 </div>
-                {/* TP 예상 수익률 */}
                 {tpRoe !== null && (
-                  <p
-                    className={`text-[10px] mt-0.5 tabular-nums ${
-                      tpRoe >= 0 ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    예상 ROE: {tpRoe >= 0 ? "+" : ""}
-                    {tpRoe.toFixed(2)}%
+                  <p className={`text-[9px] mt-0.5 tabular-nums ${tpRoe >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    ROE {tpRoe >= 0 ? "+" : ""}{tpRoe.toFixed(1)}%
                   </p>
                 )}
               </div>
-
-              {/* ── SL (손절가) ── */}
               <div>
-                <label className="text-[10px] sm:text-xs text-red-400/80 mb-1 block">
-                  SL (손절가)
-                </label>
+                <label className="text-[10px] text-red-400/80 mb-0.5 block">SL (손절가)</label>
                 <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                    $
-                  </span>
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">$</span>
                   <input
                     type="text"
                     value={addCommas(slPriceInput)}
-                    onChange={(e) =>
-                      setSlPriceInput(e.target.value.replace(/[^0-9.]/g, ""))
-                    }
-                    className="w-full bg-secondary border border-border rounded-lg pl-6 pr-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-red-500/50 tabular-nums"
+                    onChange={(e) => setSlPriceInput(e.target.value.replace(/[^0-9.]/g, ""))}
+                    className="w-full bg-secondary border border-border rounded-lg pl-5 pr-1.5 py-1.5 text-[10px] text-foreground outline-none focus:ring-1 focus:ring-red-500/50 tabular-nums"
                     placeholder="선택"
                   />
                 </div>
-                {/* SL % 프리셋 */}
-                <div className="flex gap-1 mt-1">
+                <div className="flex gap-0.5 mt-0.5">
                   {SL_PRESETS.map((pct) => (
-                    <button
-                      key={pct}
-                      onClick={() => handleSlPercent(pct)}
-                      className="flex-1 text-[10px] py-0.5 rounded bg-red-500/10 text-red-400/80 hover:bg-red-500/20 transition-colors cursor-pointer"
-                    >
+                    <button key={pct} onClick={() => handleSlPercent(pct)}
+                      className="flex-1 text-[9px] py-0.5 rounded bg-red-500/10 text-red-400/80 hover:bg-red-500/20 transition-colors cursor-pointer">
                       {pct}%
                     </button>
                   ))}
                 </div>
-                {/* SL 예상 수익률 */}
                 {slRoe !== null && (
-                  <p
-                    className={`text-[10px] mt-0.5 tabular-nums ${
-                      slRoe >= 0 ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    예상 ROE: {slRoe >= 0 ? "+" : ""}
-                    {slRoe.toFixed(2)}%
+                  <p className={`text-[9px] mt-0.5 tabular-nums ${slRoe >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    ROE {slRoe >= 0 ? "+" : ""}{slRoe.toFixed(1)}%
                   </p>
                 )}
               </div>
@@ -517,197 +447,88 @@ export default function TradingPanel() {
 
       {/* ── 레버리지 슬라이더 ── */}
       <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-[10px] sm:text-xs text-muted-foreground">
-            레버리지
-          </label>
-          <span className="text-xs sm:text-sm font-bold text-indigo-400">
-            {leverage}x
-          </span>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-[10px] text-muted-foreground">레버리지</label>
+          <span className="text-xs font-bold text-indigo-400">{leverage}x</span>
         </div>
         <input
-          type="range"
-          min={1}
-          max={125}
-          value={leverage}
+          type="range" min={1} max={125} value={leverage}
           onChange={(e) => setLeverage(Number(e.target.value))}
           className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-indigo-500
-            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-indigo-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md"
+            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+            [&::-webkit-slider-thumb]:bg-indigo-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md"
         />
-        {/* 프리셋 버튼 */}
-        <div className="flex gap-1 mt-2 flex-wrap">
+        <div className="flex gap-0.5 mt-1 flex-wrap">
           {LEVERAGE_PRESETS.map((lev) => (
-            <button
-              key={lev}
-              onClick={() => setLeverage(lev)}
-              className={`text-[10px] px-1.5 sm:px-2 py-0.5 rounded transition-colors cursor-pointer ${
+            <button key={lev} onClick={() => setLeverage(lev)}
+              className={`text-[10px] px-1.5 py-0.5 rounded transition-colors cursor-pointer ${
                 leverage === lev
                   ? "bg-indigo-500/20 text-indigo-400 ring-1 ring-indigo-500/40"
                   : "bg-secondary text-muted-foreground hover:text-foreground"
-              }`}
-            >
+              }`}>
               {lev}x
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── 주문 금액 ── */}
+      {/* ── 증거금 입력 ── */}
       <div>
-        <label className="text-[10px] sm:text-xs text-muted-foreground mb-1.5 block">
-          증거금 (USDT)
-        </label>
+        <label className="text-[10px] text-muted-foreground mb-1 block">증거금 (USDT)</label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-            $
-          </span>
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
           <input
             type="text"
             value={addCommas(marginInput)}
-            onChange={(e) =>
-              setMarginInput(e.target.value.replace(/[^0-9.]/g, ""))
-            }
-            className="w-full bg-secondary border border-border rounded-lg pl-7 pr-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring tabular-nums"
+            onChange={(e) => setMarginInput(e.target.value.replace(/[^0-9.]/g, ""))}
+            className="w-full bg-secondary border border-border rounded-lg pl-6 pr-3 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring tabular-nums"
             placeholder="금액 입력"
           />
         </div>
-        {/* % 버튼 */}
-        <div className="flex gap-1.5 mt-2">
+        <div className="flex gap-1 mt-1.5">
           {PERCENT_PRESETS.map((pct) => (
-            <button
-              key={pct}
-              onClick={() => handlePercentClick(pct)}
-              className="flex-1 text-xs py-1 rounded-md bg-secondary hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
+            <button key={pct} onClick={() => handlePercentClick(pct)}
+              className="flex-1 text-[10px] py-1 rounded-md bg-secondary hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
               {pct}%
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── 포지션 사이즈 + 수수료 미리보기 ── */}
+      {/* ── 수수료 미리보기 (증거금 입력 시) ── */}
       {marginValue > 0 && (
-        <div className="bg-secondary/60 rounded-lg px-3 py-2 text-[11px] sm:text-xs text-muted-foreground space-y-1">
+        <div className="bg-secondary/60 rounded-lg px-2.5 py-1.5 text-[10px] text-muted-foreground space-y-0.5">
           <div className="flex justify-between">
             <span>포지션 사이즈</span>
             <span className="text-foreground font-medium tabular-nums">
-              $
-              {positionSize.toLocaleString(undefined, {
-                maximumFractionDigits: 2,
-              })}
+              ${positionSize.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </span>
           </div>
           <div className="flex justify-between">
-            <span>
-              예상 수수료 ({orderType === "market" ? "0.04%" : "0.02%"})
-            </span>
+            <span>수수료 ({orderType === "market" ? "0.04%" : "0.02%"})</span>
             <span className="text-amber-400 font-medium tabular-nums">
-              $
-              {estimatedFee.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>필요 금액</span>
-            <span className="text-foreground font-medium tabular-nums">
-              $
-              {totalCost.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+              ${estimatedFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
           <div className="h-px bg-border/50 my-0.5" />
-          {orderType === "market" && (
-            <div className="space-y-1">
-              <div className="flex justify-between">
-                <span>예상 청산가 (Long)</span>
-                <span className="text-foreground font-medium tabular-nums">
-                  $
-                  {currentPrice > 0
-                    ? (currentPrice * (1 - 1 / leverage)).toLocaleString(
-                        undefined,
-                        {
-                          maximumFractionDigits: 2,
-                        }
-                      )
-                    : "—"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>예상 청산가 (Short)</span>
-                <span className="text-foreground font-medium tabular-nums">
-                  $
-                  {currentPrice > 0
-                    ? (currentPrice * (1 + 1 / leverage)).toLocaleString(
-                        undefined,
-                        {
-                          maximumFractionDigits: 2,
-                        }
-                      )
-                    : "—"}
-                </span>
-              </div>
+          {orderType === "market" && currentPrice > 0 && (
+            <div className="flex justify-between gap-2">
+              <span>청산가 L / S</span>
+              <span className="text-foreground font-medium tabular-nums text-right">
+                ${(currentPrice * (1 - 1 / leverage)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                {" / "}
+                ${(currentPrice * (1 + 1 / leverage)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </span>
             </div>
           )}
           {orderType === "limit" && parseFloat(limitPriceInput) > 0 && (
-            <div className="space-y-1">
-              <div className="flex justify-between">
-                <span>예상 청산가 (Long)</span>
-                <span className="text-foreground font-medium tabular-nums">
-                  $
-                  {(
-                    parseFloat(limitPriceInput) *
-                    (1 - 1 / leverage)
-                  ).toLocaleString(undefined, {
-                    maximumFractionDigits: 2,
-                  })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>예상 청산가 (Short)</span>
-                <span className="text-foreground font-medium tabular-nums">
-                  $
-                  {(
-                    parseFloat(limitPriceInput) *
-                    (1 + 1 / leverage)
-                  ).toLocaleString(undefined, {
-                    maximumFractionDigits: 2,
-                  })}
-                </span>
-              </div>
-              {(parseFloat(tpPriceInput) > 0 ||
-                parseFloat(slPriceInput) > 0) && (
-                <div className="space-y-1">
-                  <div className="h-px bg-border/50 my-0.5" />
-                  {parseFloat(tpPriceInput) > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-emerald-400/80">
-                        🎯 익절가 (TP)
-                      </span>
-                      <span className="text-emerald-400 font-medium tabular-nums">
-                        $
-                        {parseFloat(tpPriceInput).toLocaleString(undefined, {
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
-                    </div>
-                  )}
-                  {parseFloat(slPriceInput) > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-red-400/80">🛑 손절가 (SL)</span>
-                      <span className="text-red-400 font-medium tabular-nums">
-                        $
-                        {parseFloat(slPriceInput).toLocaleString(undefined, {
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="flex justify-between gap-2">
+              <span>청산가 L / S</span>
+              <span className="text-foreground font-medium tabular-nums text-right">
+                ${(parseFloat(limitPriceInput) * (1 - 1 / leverage)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                {" / "}
+                ${(parseFloat(limitPriceInput) * (1 + 1 / leverage)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </span>
             </div>
           )}
         </div>
@@ -718,30 +539,30 @@ export default function TradingPanel() {
         <Button
           onClick={() => handleTrade("LONG")}
           disabled={submitting}
-          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 h-10 sm:h-9"
+          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 h-9"
         >
-          <TrendingUp className="h-4 w-4" />
+          <TrendingUp className="h-3.5 w-3.5" />
           Long
         </Button>
         <Button
           onClick={() => handleTrade("SHORT")}
           disabled={submitting}
-          className="flex-1 bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 h-10 sm:h-9"
+          className="flex-1 bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 h-9"
         >
-          <TrendingDown className="h-4 w-4" />
+          <TrendingDown className="h-3.5 w-3.5" />
           Short
         </Button>
       </div>
 
       {/* 비로그인 안내 */}
       {!user && (
-        <p className="text-xs text-center text-muted-foreground">
+        <p className="text-[10px] text-center text-muted-foreground">
           거래하려면 로그인이 필요합니다
         </p>
       )}
 
       {/* 면책 문구 */}
-      <p className="text-[10px] text-center text-muted-foreground/35 pt-1 leading-relaxed">
+      <p className="text-[9px] text-center text-muted-foreground/30 leading-relaxed">
         본 서비스는 모의투자 게임입니다. 실제 투자가 아닙니다.
       </p>
     </div>
