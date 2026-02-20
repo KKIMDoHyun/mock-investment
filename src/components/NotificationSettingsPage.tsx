@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   X,
   Settings,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
@@ -244,6 +245,7 @@ function SettingRow({
 export default function NotificationSettingsPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const loading = useAuthStore((s) => s.loading);
   const {
     notifications,
     unreadCount,
@@ -259,13 +261,15 @@ export default function NotificationSettingsPage() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   useEffect(() => {
+    // 인증 로딩 중에는 리다이렉트 금지 — 로딩 완료 후 판단
+    if (loading) return;
     if (!user) {
       navigate({ to: "/login" });
       return;
     }
     fetchNotifications(user.id);
     if (!settingsLoaded) fetchSettings(user.id);
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggle = useCallback(
     async (key: keyof typeof settings, value: boolean) => {
@@ -283,6 +287,20 @@ export default function NotificationSettingsPage() {
     await markAllAsRead(user.id);
     toast.success("모든 알림을 읽음 처리했습니다.");
   }, [user, unreadCount, markAllAsRead]);
+
+  // 인증 초기화 중이면 로딩 스피너 표시 (페이지 이동 방지)
+  if (loading) {
+    return (
+      <main className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <RefreshCw className="h-6 w-6 animate-spin" />
+          <p className="text-sm">로딩 중...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!user) return null;
 
   return (
     <>

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { UserCircle, Camera, Loader2, AlertTriangle, Trash2, ShieldAlert } from "lucide-react";
+import { UserCircle, Camera, Loader2, AlertTriangle, Trash2, ShieldAlert, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/ui/button";
@@ -10,6 +10,7 @@ import { Seo } from "@/hooks/useSeo";
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
+  const loading = useAuthStore((s) => s.loading);
   const nickname = useAuthStore((s) => s.nickname);
   const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const updateNickname = useAuthStore((s) => s.updateNickname);
@@ -37,12 +38,13 @@ export default function ProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nickname]);
 
-  // 비로그인 → 홈으로
+  // 인증 로딩 완료 후 비로그인 → 홈으로 (로딩 중에는 리다이렉트 금지)
   useEffect(() => {
+    if (loading) return;
     if (!user) {
       navigate({ to: "/" });
     }
-  }, [user, navigate]);
+  }, [user, loading, navigate]);
 
   const handleSubmit = async () => {
     const trimmed = newNickname.trim();
@@ -105,6 +107,18 @@ export default function ProfilePage() {
     },
     [updateAvatar]
   );
+
+  // 인증 초기화 중이면 로딩 스피너 표시 (페이지 이동 방지)
+  if (loading) {
+    return (
+      <main className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <RefreshCw className="h-6 w-6 animate-spin" />
+          <p className="text-sm">로딩 중...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!user) return null;
 
