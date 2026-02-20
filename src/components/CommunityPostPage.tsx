@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, Fragment } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { Seo } from "@/hooks/useSeo";
 import {
@@ -250,6 +250,28 @@ function ImageGallery({ images }: { images: string[] }) {
   );
 }
 
+// ── @닉네임 멘션 렌더러 ──
+const MENTION_REGEX = /(@\S+)/g;
+
+function CommentContent({ content }: { content: string }) {
+  const parts = content.split(MENTION_REGEX);
+  return (
+    <p className="text-sm text-foreground mt-1 whitespace-pre-wrap break-words">
+      {parts.map((part, i) => {
+        if (MENTION_REGEX.test(part)) {
+          MENTION_REGEX.lastIndex = 0;
+          return (
+            <span key={i} className="text-indigo-400 font-medium">
+              {part}
+            </span>
+          );
+        }
+        return <Fragment key={i}>{part}</Fragment>;
+      })}
+    </p>
+  );
+}
+
 // ── 아바타 컴포넌트 ──
 function UserAvatar({
   nickname,
@@ -365,7 +387,7 @@ function CommentItem({
   replies: Comment[];
   isAuthor: boolean;
   currentUserId: string | undefined;
-  onReply: (parentId: string) => void;
+  onReply: (parentId: string, nickname: string) => void;
   onDelete: (commentId: string) => void;
 }) {
   return (
@@ -375,7 +397,7 @@ function CommentItem({
         comment={comment}
         isAuthor={isAuthor}
         isOwn={currentUserId === comment.user_id}
-        onReply={() => onReply(comment.id)}
+        onReply={() => onReply(comment.id, comment.nickname)}
         onDelete={() => onDelete(comment.id)}
       />
 
@@ -388,7 +410,7 @@ function CommentItem({
               comment={reply}
               isAuthor={false}
               isOwn={currentUserId === reply.user_id}
-              onReply={() => onReply(comment.id)}
+              onReply={() => onReply(comment.id, reply.nickname)}
               onDelete={() => onDelete(reply.id)}
               isReply
             />
@@ -431,9 +453,7 @@ function SingleComment({
             {formatCommentTime(comment.created_at)}
           </span>
         </div>
-        <p className="text-sm text-foreground mt-1 whitespace-pre-wrap break-words">
-          {comment.content}
-        </p>
+        <CommentContent content={comment.content} />
         <div className="flex items-center gap-3 mt-1.5">
           <button
             type="button"
@@ -464,13 +484,29 @@ function CommentForm({
   onSubmit,
   placeholder,
   onCancel,
+  prefill,
 }: {
   onSubmit: (content: string) => Promise<void>;
   placeholder?: string;
   onCancel?: () => void;
+  prefill?: string;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(prefill ?? "");
   const [sending, setSending] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // prefill 변경 시 텍스트 세팅 + 자동 포커스 + 커서 위치 이동
+  useEffect(() => {
+    if (prefill !== undefined) {
+      setText(prefill);
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(prefill.length, prefill.length);
+      });
+    }
+  }, [prefill]);
 
   const handleSubmit = async () => {
     if (!text.trim() || sending) return;
@@ -483,6 +519,7 @@ function CommentForm({
   return (
     <div className="flex gap-2 items-start">
       <textarea
+        ref={textareaRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={placeholder ?? "댓글을 입력하세요..."}
@@ -542,7 +579,8 @@ export default function CommunityPostPage() {
     toggleLike,
   } = useCommunityStore();
 
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; nickname: string } | null>(null);
+  const replyFormRef = useRef<HTMLDivElement>(null);
   const viewCountedRef = useRef<string | null>(null);
 
   // 게시글 + 댓글 로드
@@ -804,24 +842,35 @@ export default function CommunityPostPage() {
                   replies={commentTree.repliesMap.get(comment.id) ?? []}
                   isAuthor={comment.user_id === post.user_id}
                   currentUserId={user?.id}
-                  onReply={(parentId) => {
+                  onReply={(parentId, nickname) => {
                     if (!user) {
                       toast.error("로그인 후 답글을 작성할 수 있습니다.");
                       return;
                     }
-                    setReplyingTo(parentId);
+                    setReplyingTo({ id: parentId, nickname });
+                    // 답글 폼으로 스크롤
+                    setTimeout(() => {
+                      replyFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    }, 50);
                   }}
                   onDelete={handleDeleteComment}
                 />
 
                 {/* 대댓글 입력폼 */}
-                {replyingTo === comment.id && user && (
-                  <div className="ml-8 pl-3 py-2">
+                {replyingTo?.id === comment.id && user && (
+                  <div ref={replyFormRef} className="ml-8 pl-3 py-2 border-l-2 border-indigo-500/30">
+                    {/* 답글 대상 표시 */}
+                    <div className="flex items-center gap-1.5 mb-1.5 text-[11px] text-muted-foreground">
+                      <Reply className="h-3 w-3 text-indigo-400" />
+                      <span className="text-indigo-400 font-medium">@{replyingTo.nickname}</span>
+                      <span>님에게 답글 작성 중</span>
+                    </div>
                     <CommentForm
+                      prefill={`@${replyingTo.nickname} `}
                       onSubmit={(content) =>
                         handleCreateComment(content, comment.id)
                       }
-                      placeholder={`${comment.nickname}님에게 답글...`}
+                      placeholder={`@${replyingTo.nickname}님에게 답글...`}
                       onCancel={() => setReplyingTo(null)}
                     />
                   </div>

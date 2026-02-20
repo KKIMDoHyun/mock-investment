@@ -197,10 +197,23 @@ interface TradingState {
 // ────────────────────────────────────────────
 // 모듈-레벨 WebSocket 관리 (컴포넌트 생명주기와 무관)
 // ────────────────────────────────────────────
-function getPriceWsUrl(): string {
-  const sym = useTradingStore.getState().selectedSymbol;
-  return `wss://fstream.binance.com/ws/${SYMBOLS[sym].wsStream}@aggTrade`;
+
+/** 모든 심볼을 하나의 combined stream으로 구독 */
+function getCombinedPriceWsUrl(): string {
+  const streams = Object.values(SYMBOLS)
+    .map((s) => `${s.wsStream}@aggTrade`)
+    .join("/");
+  return `wss://fstream.binance.com/stream?streams=${streams}`;
 }
+
+/** stream 이름 → SymbolId 역매핑 ("btcusdt@aggTrade" → "BTCUSDT") */
+function streamToSymbolId(stream: string): SymbolId | null {
+  for (const sym of Object.values(SYMBOLS)) {
+    if (stream.startsWith(sym.wsStream)) return sym.id;
+  }
+  return null;
+}
+
 const THROTTLE_MS = 250;
 const RECONNECT_BASE_MS = 2000;
 const RECONNECT_MAX_MS = 30000;
@@ -208,7 +221,8 @@ const RECONNECT_MAX_MS = 30000;
 let priceWs: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = RECONNECT_BASE_MS;
-let lastPriceTs = 0;
+/** 심볼별 마지막 수신 타임스탬프 (쓰로틀링) */
+const lastPriceTsMap: Partial<Record<SymbolId, number>> = {};
 let streamActive = false; // startPriceStream 호출 여부
 
 // ── 헬퍼: 청산가 계산 ──
@@ -357,18 +371,17 @@ async function mergeOrCreatePosition(params: {
 }
 
 // ── 지정가 주문 체결 감시 ──
-let isCheckingOrders = false;
+const isCheckingOrdersMap: Partial<Record<SymbolId, boolean>> = {};
 
-async function checkAndFillPendingOrders(currentPrice: number) {
-  if (isCheckingOrders) return;
+async function checkAndFillPendingOrders(symbol: SymbolId, currentPrice: number) {
+  if (isCheckingOrdersMap[symbol]) return;
   const { pendingOrders } = useTradingStore.getState();
   if (pendingOrders.length === 0) return;
 
-  isCheckingOrders = true;
+  isCheckingOrdersMap[symbol] = true;
   try {
-    const { selectedSymbol } = useTradingStore.getState();
     const ordersToFill = pendingOrders.filter((o) => {
-      if (o.symbol !== selectedSymbol) return false;
+      if (o.symbol !== symbol) return false;
       if (o.position_type === "LONG") return currentPrice <= o.limit_price;
       if (o.position_type === "SHORT") return currentPrice >= o.limit_price;
       return false;
@@ -432,25 +445,25 @@ async function checkAndFillPendingOrders(currentPrice: number) {
       }
     }
   } finally {
-    isCheckingOrders = false;
+    isCheckingOrdersMap[symbol] = false;
   }
 }
 
 // ── 강제 청산(Liquidation) 감시 ──
-let isCheckingLiquidation = false;
+const isCheckingLiquidationMap: Partial<Record<SymbolId, boolean>> = {};
 
-async function checkLiquidation(currentPrice: number) {
-  if (isCheckingLiquidation) return;
+async function checkLiquidation(symbol: SymbolId, currentPrice: number) {
+  if (isCheckingLiquidationMap[symbol]) return;
   const state = useTradingStore.getState();
   if (state.positions.length === 0) return;
 
-  // 현재 심볼의 청산가가 설정된 포지션만 대상
+  // 해당 심볼의 청산가가 설정된 포지션만 대상
   const candidates = state.positions.filter(
-    (t) => t.symbol === state.selectedSymbol && t.liquidation_price != null && t.liquidation_price > 0
+    (t) => t.symbol === symbol && t.liquidation_price != null && t.liquidation_price > 0
   );
   if (candidates.length === 0) return;
 
-  isCheckingLiquidation = true;
+  isCheckingLiquidationMap[symbol] = true;
   try {
     for (const trade of [...candidates]) {
       const liqPrice = trade.liquidation_price!;
@@ -483,25 +496,25 @@ async function checkLiquidation(currentPrice: number) {
       }
     }
   } finally {
-    isCheckingLiquidation = false;
+    isCheckingLiquidationMap[symbol] = false;
   }
 }
 
 // ── TP/SL 자동 체결 감시 ──
-let isCheckingTpSl = false;
+const isCheckingTpSlMap: Partial<Record<SymbolId, boolean>> = {};
 
-async function checkTpSlPositions(currentPrice: number) {
-  if (isCheckingTpSl) return;
+async function checkTpSlPositions(symbol: SymbolId, currentPrice: number) {
+  if (isCheckingTpSlMap[symbol]) return;
   const state = useTradingStore.getState();
   if (state.positions.length === 0) return;
 
-  // 현재 심볼의 TP/SL이 설정된 포지션만 필터
+  // 해당 심볼의 TP/SL이 설정된 포지션만 필터
   const candidates = state.positions.filter(
-    (t) => t.symbol === state.selectedSymbol && (t.tp_price != null || t.sl_price != null)
+    (t) => t.symbol === symbol && (t.tp_price != null || t.sl_price != null)
   );
   if (candidates.length === 0) return;
 
-  isCheckingTpSl = true;
+  isCheckingTpSlMap[symbol] = true;
   try {
     // 이터레이션 중 positions 변경 방지를 위해 스냅샷 사용
     for (const trade of [...candidates]) {
@@ -542,7 +555,7 @@ async function checkTpSlPositions(currentPrice: number) {
       }
     }
   } finally {
-    isCheckingTpSl = false;
+    isCheckingTpSlMap[symbol] = false;
   }
 }
 
@@ -554,34 +567,47 @@ function connectPriceWs() {
   )
     return;
 
-  priceWs = new WebSocket(getPriceWsUrl());
+  // 모든 심볼을 하나의 combined stream으로 구독
+  priceWs = new WebSocket(getCombinedPriceWsUrl());
 
   priceWs.onopen = () => {
-    reconnectDelay = RECONNECT_BASE_MS; // 성공 시 딜레이 초기화
+    reconnectDelay = RECONNECT_BASE_MS;
   };
 
   priceWs.onmessage = (event: MessageEvent) => {
     try {
+      // combined stream 메시지 형식: { stream: "btcusdt@aggTrade", data: { s, p, ... } }
+      const outer = JSON.parse(event.data as string) as {
+        stream?: string;
+        data?: { s?: string; p?: string };
+        p?: string;
+      };
+
+      const streamName = outer.stream ?? "";
+      const symId = streamToSymbolId(streamName);
+      if (!symId) return;
+
+      const msgData = outer.data ?? (outer as { p?: string });
+      const price = parseFloat(msgData.p ?? "");
+      if (!Number.isFinite(price) || price <= 0) return;
+
+      // 심볼별 쓰로틀링
       const now = Date.now();
-      if (now - lastPriceTs < THROTTLE_MS) return; // 쓰로틀링
+      const lastTs = lastPriceTsMap[symId] ?? 0;
+      if (now - lastTs < THROTTLE_MS) return;
+      lastPriceTsMap[symId] = now;
 
-      const msg = JSON.parse(event.data as string);
-      const price = parseFloat(msg.p); // aggTrade → "p" = price
-      if (Number.isFinite(price) && price > 0) {
-        lastPriceTs = now;
-        const sym = useTradingStore.getState().selectedSymbol;
-        useTradingStore.setState((s) => ({
-          currentPrice: price,
-          prices: { ...s.prices, [sym]: price },
-        }));
+      const { selectedSymbol } = useTradingStore.getState();
+      useTradingStore.setState((s) => ({
+        // 선택된 심볼이면 currentPrice도 동기화
+        currentPrice: symId === selectedSymbol ? price : s.currentPrice,
+        prices: { ...s.prices, [symId]: price },
+      }));
 
-        // 강제 청산 체크 (최우선 — 청산가 도달 시 즉시 종료)
-        checkLiquidation(price);
-        // 지정가 주문 체결 체크 (비동기 — WebSocket 블로킹 X)
-        checkAndFillPendingOrders(price);
-        // TP/SL 자동 체결 체크
-        checkTpSlPositions(price);
-      }
+      // 해당 심볼에 대한 안전 체크 (순서: 청산 → 지정가 체결 → TP/SL)
+      checkLiquidation(symId, price);
+      checkAndFillPendingOrders(symId, price);
+      checkTpSlPositions(symId, price);
     } catch {
       // 비정상 메시지 무시
     }
@@ -728,15 +754,11 @@ export function calcPnl(
 export const useTradingStore = create<TradingState>((set, get) => ({
   selectedSymbol: "BTCUSDT" as SymbolId,
   setSelectedSymbol: (symbol: SymbolId) => {
+    // combined stream이 모든 심볼을 구독하므로 WS 재연결 불필요
+    // 캐시에 가격이 있으면 즉시 반영, 없으면 REST로 보완
     const prevPrice = get().prices[symbol] || 0;
     set({ selectedSymbol: symbol, currentPrice: prevPrice });
-    if (streamActive) {
-      if (priceWs) {
-        priceWs.onclose = null;
-        priceWs.close();
-        priceWs = null;
-      }
-      connectPriceWs();
+    if (prevPrice <= 0) {
       fetchAllSymbolPrices();
     }
   },
@@ -957,9 +979,12 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     set({ pendingOrders });
 
     // 현재 가격이 이미 있으면 즉시 체결 체크 (앱 재접속 시)
-    const { currentPrice } = get();
-    if (currentPrice > 0 && pendingOrders.length > 0) {
-      checkAndFillPendingOrders(currentPrice);
+    const { prices } = get();
+    if (pendingOrders.length > 0) {
+      for (const sym of Object.keys(SYMBOLS) as SymbolId[]) {
+        const p = prices[sym];
+        if (p && p > 0) checkAndFillPendingOrders(sym, p);
+      }
     }
   },
 

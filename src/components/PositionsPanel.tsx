@@ -275,11 +275,7 @@ function PositionCard({ trade }: { trade: Trade }) {
 
       {/* 수익 */}
       {priceReady ? (
-        <div
-          className={`flex items-baseline gap-2 ${
-            isProfit ? "text-emerald-400" : "text-red-400"
-          }`}
-        >
+        <div className={`flex items-baseline gap-2 ${isProfit ? "text-emerald-400" : "text-red-400"}`}>
           <span className="text-base font-bold tabular-nums">
             {isProfit ? "+" : ""}${fmtUsd(pnl)}
           </span>
@@ -312,11 +308,7 @@ function PositionCard({ trade }: { trade: Trade }) {
         <div className="flex justify-between">
           <span className="text-muted-foreground">현재가</span>
           <span className="text-foreground tabular-nums">
-            {priceReady ? (
-              `$${fmtUsd(tradePrice)}`
-            ) : (
-              <PriceSkeleton className="w-16 h-3.5" />
-            )}
+            {priceReady ? `$${fmtUsd(tradePrice)}` : <PriceSkeleton className="w-16 h-3.5" />}
           </span>
         </div>
         <div className="flex justify-between">
