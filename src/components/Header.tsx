@@ -8,6 +8,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+import { useOnlineCount } from "@/hooks/useOnlineCount";
 import { Button } from "@/ui/button";
 import {
   DropdownMenu,
@@ -25,12 +26,14 @@ export default function Header() {
   const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const signOut = useAuthStore((s) => s.signOut);
+  const onlineCount = useOnlineCount();
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
       <div className="w-full px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-12 sm:h-14">
-          {/* Logo */}
+          {/* Logo + Online count */}
+          <div className="flex items-center gap-3 sm:gap-4">
           <Link
             to="/"
             className="flex items-center gap-2 sm:gap-2.5 no-underline"
@@ -54,6 +57,20 @@ export default function Header() {
               Crypto Mock
             </span>
           </Link>
+
+          {/* Online count */}
+          {onlineCount > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="tabular-nums">
+                <span className="hidden sm:inline">접속 </span>{onlineCount}<span className="hidden sm:inline">명</span>
+              </span>
+            </div>
+          )}
+          </div>
 
           {/* Auth area */}
           {user ? (
