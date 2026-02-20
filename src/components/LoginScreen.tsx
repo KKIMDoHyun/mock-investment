@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/ui/button";
+import { Seo } from "@/hooks/useSeo";
 
 export default function LoginScreen() {
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
@@ -17,6 +18,7 @@ export default function LoginScreen() {
 
   return (
     <main className="flex-1 flex items-center justify-center p-4">
+      <Seo title="로그인" url="/login" noIndex />
       {/* Subtle background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/40 via-background to-purple-950/30 pointer-events-none" />
 

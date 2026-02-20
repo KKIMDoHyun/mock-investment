@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
+import { Seo } from "@/hooks/useSeo";
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
@@ -109,6 +110,7 @@ export default function ProfilePage() {
 
   return (
     <main className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-6 py-4 sm:py-8 flex flex-col gap-4 sm:gap-8">
+      <Seo title="내 정보 설정" url="/profile" noIndex />
       {/* ── 헤더 ── */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center">

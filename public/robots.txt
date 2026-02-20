@@ -1,4 +1,9 @@
 User-agent: *
 Allow: /
 
+# 로그인·관리자·프로필 등 개인 페이지는 색인 불필요
+Disallow: /login
+Disallow: /admin
+Disallow: /profile
+
 Sitemap: https://modumotu.com/sitemap.xml

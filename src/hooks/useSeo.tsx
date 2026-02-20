@@ -22,6 +22,7 @@ export function Seo({
   noIndex = false,
 }: SeoProps) {
   const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} | 모의 암호화폐 투자`;
+  const canonicalUrl = url ? `${BASE_URL}${url}` : BASE_URL;
 
   return (
     <Helmet>
@@ -29,11 +30,14 @@ export function Seo({
       <meta name="description" content={description} />
       {noIndex && <meta name="robots" content="noindex, nofollow" />}
 
+      {/* Canonical */}
+      <link rel="canonical" href={canonicalUrl} />
+
       {/* OG */}
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={image} />
-      <meta property="og:url" content={url ? `${BASE_URL}${url}` : BASE_URL} />
+      <meta property="og:url" content={canonicalUrl} />
       <meta property="og:site_name" content={SITE_NAME} />
       <meta property="og:type" content="website" />
 

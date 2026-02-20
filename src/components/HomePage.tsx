@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSearch, useNavigate } from "@tanstack/react-router";
 import { BarChart3, BookOpen, ChevronDown } from "lucide-react";
+import { Seo } from "@/hooks/useSeo";
 import TradingChart from "@/components/TradingChart";
 import OrderBook from "@/components/OrderBook";
 import TradingPanel from "@/components/TradingPanel";
@@ -211,6 +212,8 @@ export default function HomePage() {
   ]);
 
   return (
+    <>
+      <Seo url="/" />
     <main className="flex-1 w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col gap-2 sm:gap-3">
       {/* ── 상단 종목 정보 바 ── */}
       <SymbolBar />
@@ -242,5 +245,6 @@ export default function HomePage() {
       {/* ── 하단: 포지션 / 거래 내역 ── */}
       <PositionsPanel />
     </main>
+    </>
   );
 }

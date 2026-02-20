@@ -124,7 +124,7 @@ export default function RootLayout() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Seo />
+      <Seo url="/" />
       <SplashScreen isLoading={!isAppReady} />
       <InAppBrowserGuard />
       <TermsAgreementModal />
