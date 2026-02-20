@@ -23,6 +23,8 @@ import { Input } from "@/ui/input";
 
 const MAX_IMAGES = 5;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_CONTENT_LENGTH = 1500;
+const MAX_TITLE_LENGTH = 100;
 
 interface WritePostModalProps {
   open: boolean;
@@ -226,18 +228,43 @@ export default function WritePostModal({
             placeholder="제목을 입력하세요"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            maxLength={100}
+            maxLength={MAX_TITLE_LENGTH}
           />
 
           {/* 본문 */}
-          <textarea
-            ref={textareaRef}
-            placeholder="내용을 입력하세요..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full min-h-[200px] bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-indigo-500/50 transition-colors resize-y"
-            maxLength={5000}
-          />
+          <div className="space-y-1.5">
+            <textarea
+              ref={textareaRef}
+              placeholder="내용을 입력하세요..."
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className={`w-full min-h-[200px] bg-secondary/50 border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors resize-y ${
+                content.length > MAX_CONTENT_LENGTH
+                  ? "border-red-500/60 focus:border-red-500"
+                  : "border-border focus:border-indigo-500/50"
+              }`}
+              maxLength={MAX_CONTENT_LENGTH}
+            />
+            <div className="flex items-center justify-between px-0.5">
+              {content.length === 0 && (
+                <p className="text-[11px] text-muted-foreground">내용을 입력해 주세요.</p>
+              )}
+              {content.length > 0 && content.length <= MAX_CONTENT_LENGTH && (
+                <span />
+              )}
+              <p
+                className={`text-[11px] tabular-nums ml-auto ${
+                  content.length >= MAX_CONTENT_LENGTH
+                    ? "text-red-400 font-medium"
+                    : content.length >= MAX_CONTENT_LENGTH * 0.9
+                      ? "text-amber-400"
+                      : "text-muted-foreground"
+                }`}
+              >
+                {content.length} / {MAX_CONTENT_LENGTH}
+              </p>
+            </div>
+          </div>
 
           {/* 도구 버튼들 */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -331,7 +358,15 @@ export default function WritePostModal({
             >
               취소
             </Button>
-            <Button onClick={handleSubmit} disabled={submitting}>
+            <Button
+              onClick={handleSubmit}
+              disabled={
+                submitting ||
+                !title.trim() ||
+                !content.trim() ||
+                content.length > MAX_CONTENT_LENGTH
+              }
+            >
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-1.5" />

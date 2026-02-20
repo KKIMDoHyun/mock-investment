@@ -10,11 +10,13 @@ import {
   ArrowUp,
   Trophy,
   RefreshCw,
+  Heart,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import { useCommunityStore } from "@/store/communityStore";
-import type { Post } from "@/store/communityStore";
+import type { Post, SortBy } from "@/store/communityStore";
 import { Button } from "@/ui/button";
 import WritePostModal from "@/components/WritePostModal";
 
@@ -198,7 +200,17 @@ const SCROLL_RESTORE_KEY = "community_restore";
 const SCROLL_Y_KEY = "community_scrollY";
 
 // ── 단일 피드 카드 ──
-function FeedCard({ post, rank }: { post: Post; rank: number | undefined }) {
+function FeedCard({
+  post,
+  rank,
+  isLiked,
+  onLike,
+}: {
+  post: Post;
+  rank: number | undefined;
+  isLiked: boolean;
+  onLike: (e: React.MouseEvent) => void;
+}) {
   const profitData = parseProfitCard(post.content);
   const plainText = getPlainContent(post.content);
 
@@ -247,7 +259,7 @@ function FeedCard({ post, rank }: { post: Post; rank: number | undefined }) {
         {/* 이미지 그리드 (본문 아래) */}
         <ImageGrid images={post.images} />
 
-        {/* 하단: 조회수 + 댓글수 */}
+        {/* 하단: 조회수 + 댓글수 + 좋아요 */}
         <div className="flex items-center gap-4 pt-1 text-[12px] text-muted-foreground">
           <span className="flex items-center gap-1">
             <Eye className="h-3.5 w-3.5" />
@@ -257,11 +269,29 @@ function FeedCard({ post, rank }: { post: Post; rank: number | undefined }) {
             <MessageCircle className="h-3.5 w-3.5" />
             {post.comment_count}
           </span>
+          <button
+            type="button"
+            onClick={onLike}
+            className={`flex items-center gap-1 transition-colors ${
+              isLiked
+                ? "text-rose-400"
+                : "text-muted-foreground hover:text-rose-400"
+            }`}
+          >
+            <Heart className={`h-3.5 w-3.5 ${isLiked ? "fill-rose-400" : ""}`} />
+            {post.like_count}
+          </button>
         </div>
       </div>
     </Link>
   );
 }
+
+// ── 정렬 탭 ──
+const SORT_OPTIONS: { label: string; value: SortBy; icon: React.ReactNode }[] = [
+  { label: "최신순", value: "latest", icon: <Clock className="h-3 w-3" /> },
+  { label: "추천순", value: "popular", icon: <Heart className="h-3 w-3" /> },
+];
 
 // ── 메인 페이지 ──
 export default function CommunityPage() {
@@ -276,6 +306,11 @@ export default function CommunityPage() {
     resetPosts,
     userRanks,
     fetchUserRanks,
+    likedPostIds,
+    sortBy,
+    setSortBy,
+    fetchLikedPostIds,
+    toggleLike,
   } = useCommunityStore();
   const [writeOpen, setWriteOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -315,6 +350,15 @@ export default function CommunityPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 유저 변경 시 좋아요 목록 동기화
+  useEffect(() => {
+    if (user) {
+      fetchLikedPostIds(user.id);
+    } else {
+      useCommunityStore.setState({ likedPostIds: new Set() });
+    }
+  }, [user?.id, fetchLikedPostIds]);
+
   // 무한스크롤: 하단 감지 시 다음 페이지 로드
   useEffect(() => {
     const el = bottomRef.current;
@@ -339,6 +383,20 @@ export default function CommunityPage() {
     await Promise.all([resetPosts(), fetchUserRanks()]);
     setRefreshing(false);
   }, [resetPosts, fetchUserRanks]);
+
+  // 좋아요 핸들러
+  const handleLike = useCallback(
+    (e: React.MouseEvent, postId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!user) {
+        toast.error("로그인 후 추천할 수 있습니다.");
+        return;
+      }
+      toggleLike(postId, user.id);
+    },
+    [user, toggleLike],
+  );
 
   return (
     <main className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
@@ -373,6 +431,25 @@ export default function CommunityPage() {
         </Button>
       </div>
 
+      {/* 정렬 탭 */}
+      <div className="flex items-center gap-1 mb-4">
+        {SORT_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => setSortBy(opt.value)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              sortBy === opt.value
+                ? "bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/30"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+            }`}
+          >
+            {opt.icon}
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* 피드 */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-2">
@@ -391,7 +468,13 @@ export default function CommunityPage() {
       ) : (
         <div className="space-y-3">
           {posts.map((post) => (
-            <FeedCard key={post.id} post={post} rank={userRanks[post.user_id]} />
+            <FeedCard
+              key={post.id}
+              post={post}
+              rank={userRanks[post.user_id]}
+              isLiked={likedPostIds.has(post.id)}
+              onLike={(e) => handleLike(e, post.id)}
+            />
           ))}
 
           {/* 무한스크롤 감지 영역 + 로딩 스피너 */}

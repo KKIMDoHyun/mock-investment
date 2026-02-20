@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Heart,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
@@ -528,13 +529,16 @@ export default function CommunityPostPage() {
     comments,
     commentsLoading,
     userRanks,
+    likedPostIds,
     fetchPostById,
     incrementViewCount,
     fetchComments,
     fetchUserRanks,
+    fetchLikedPostIds,
     createComment,
     deleteComment,
     deletePost,
+    toggleLike,
   } = useCommunityStore();
 
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -546,6 +550,23 @@ export default function CommunityPostPage() {
     fetchComments(postId);
     fetchUserRanks();
   }, [postId, fetchPostById, fetchComments, fetchUserRanks]);
+
+  // 유저 변경 시 좋아요 목록 동기화
+  useEffect(() => {
+    if (user) {
+      fetchLikedPostIds(user.id);
+    }
+  }, [user?.id, fetchLikedPostIds]);
+
+  // 좋아요 핸들러
+  const handleLike = useCallback(() => {
+    if (!user) {
+      toast.error("로그인 후 추천할 수 있습니다.");
+      return;
+    }
+    if (!post) return;
+    toggleLike(post.id, user.id);
+  }, [user, post, toggleLike]);
 
   // 조회수: 세션당 1회만 증가 (StrictMode 이중 실행 방지 포함)
   useEffect(() => {
@@ -714,8 +735,26 @@ export default function CommunityPostPage() {
       <ImageGallery images={post.images} />
 
       {/* 본문 */}
-      <div className="min-h-[100px] mb-8">
+      <div className="min-h-[100px] mb-6">
         <PostContent content={post.content} />
+      </div>
+
+      {/* 좋아요 버튼 */}
+      <div className="flex justify-center mb-8">
+        <button
+          type="button"
+          onClick={handleLike}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm font-medium transition-colors ${
+            likedPostIds.has(post.id)
+              ? "border-rose-500/50 bg-rose-500/10 text-rose-400"
+              : "border-border bg-card text-muted-foreground hover:border-rose-500/40 hover:text-rose-400"
+          }`}
+        >
+          <Heart
+            className={`h-4 w-4 ${likedPostIds.has(post.id) ? "fill-rose-400" : ""}`}
+          />
+          추천 {post.like_count > 0 && <span className="tabular-nums">{post.like_count}</span>}
+        </button>
       </div>
 
       {/* 댓글 섹션 */}

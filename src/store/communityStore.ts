@@ -3,6 +3,8 @@ import { supabase } from "@/lib/supabase";
 
 // ── 타입 정의 ──
 
+export type SortBy = "latest" | "popular";
+
 export interface Post {
   id: string;
   user_id: string;
@@ -11,6 +13,7 @@ export interface Post {
   images: string[];
   view_count: number;
   comment_count: number;
+  like_count: number;
   created_at: string;
   updated_at: string;
   // join된 프로필 정보
@@ -68,6 +71,10 @@ interface CommunityState {
   // 유저 랭킹 (userId → rank)
   userRanks: Record<string, number>;
 
+  // 좋아요
+  likedPostIds: Set<string>;
+  sortBy: SortBy;
+
   // 액션
   _fetchPage: (page: number) => Promise<Post[]>;
   fetchPosts: () => Promise<void>;
@@ -91,6 +98,9 @@ interface CommunityState {
     parentId?: string | null;
   }) => Promise<{ success: boolean; message: string }>;
   deleteComment: (commentId: string) => Promise<{ success: boolean; message: string }>;
+  setSortBy: (sortBy: SortBy) => Promise<void>;
+  fetchLikedPostIds: (userId: string) => Promise<void>;
+  toggleLike: (postId: string, userId: string) => Promise<void>;
 }
 
 export const useCommunityStore = create<CommunityState>((set, get) => ({
@@ -108,6 +118,8 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
   commentsLoading: false,
 
   userRanks: {},
+  likedPostIds: new Set<string>(),
+  sortBy: "latest",
 
   // ── 유저 총자산 랭킹 조회 ──
   fetchUserRanks: async () => {
@@ -173,12 +185,22 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
   _fetchPage: async (page: number): Promise<Post[]> => {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
+    const { sortBy } = get();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("posts")
-      .select("id, user_id, title, content, images, view_count, created_at, updated_at")
-      .order("created_at", { ascending: false })
+      .select("id, user_id, title, content, images, view_count, like_count, created_at, updated_at")
       .range(from, to);
+
+    if (sortBy === "popular") {
+      query = query
+        .order("like_count", { ascending: false })
+        .order("created_at", { ascending: false });
+    } else {
+      query = query.order("created_at", { ascending: false });
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("게시글 목록 로드 에러:", error.message);
@@ -231,6 +253,7 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
         content: r.content as string,
         images: (r.images as string[]) ?? [],
         view_count: Number(r.view_count) || 0,
+        like_count: Number(r.like_count) || 0,
         comment_count: commentCountMap.get(r.id as string) ?? 0,
         created_at: r.created_at as string,
         updated_at: r.updated_at as string,
@@ -289,7 +312,7 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
 
     const { data, error } = await supabase
       .from("posts")
-      .select("id, user_id, title, content, images, view_count, created_at, updated_at")
+      .select("id, user_id, title, content, images, view_count, like_count, created_at, updated_at")
       .eq("id", postId)
       .single();
 
@@ -319,6 +342,7 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
       content: data.content as string,
       images: (data.images as string[]) ?? [],
       view_count: Number(data.view_count) || 0,
+      like_count: Number(data.like_count) || 0,
       comment_count: commentCount ?? 0,
       created_at: data.created_at as string,
       updated_at: data.updated_at as string,
@@ -464,5 +488,94 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
     }
 
     return { success: true, message: "댓글이 삭제되었습니다." };
+  },
+
+  // ── 정렬 변경 ──
+  setSortBy: async (sortBy) => {
+    set({ sortBy });
+    await get().fetchPosts();
+  },
+
+  // ── 현재 유저의 좋아요 목록 조회 ──
+  fetchLikedPostIds: async (userId) => {
+    const { data } = await supabase
+      .from("post_likes")
+      .select("post_id")
+      .eq("user_id", userId);
+
+    set({
+      likedPostIds: new Set((data ?? []).map((r) => r.post_id as string)),
+    });
+  },
+
+  // ── 좋아요 토글 (낙관적 업데이트) ──
+  toggleLike: async (postId, userId) => {
+    const { likedPostIds, posts, selectedPost } = get();
+    const isLiked = likedPostIds.has(postId);
+    const delta = isLiked ? -1 : 1;
+
+    // 낙관적 업데이트
+    const newLikedPostIds = new Set(likedPostIds);
+    if (isLiked) {
+      newLikedPostIds.delete(postId);
+    } else {
+      newLikedPostIds.add(postId);
+    }
+
+    set({
+      likedPostIds: newLikedPostIds,
+      posts: posts.map((p) =>
+        p.id === postId
+          ? { ...p, like_count: Math.max(0, p.like_count + delta) }
+          : p,
+      ),
+      selectedPost:
+        selectedPost?.id === postId
+          ? { ...selectedPost, like_count: Math.max(0, selectedPost.like_count + delta) }
+          : selectedPost,
+    });
+
+    // DB 반영
+    let error;
+    if (isLiked) {
+      ({ error } = await supabase
+        .from("post_likes")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", userId));
+    } else {
+      ({ error } = await supabase
+        .from("post_likes")
+        .insert({ post_id: postId, user_id: userId }));
+    }
+
+    if (error) {
+      // 실패 시 롤백
+      set({ likedPostIds, posts, selectedPost });
+      return;
+    }
+
+    // like_count DB 동기화 (정확한 카운트)
+    const { count } = await supabase
+      .from("post_likes")
+      .select("*", { count: "exact", head: true })
+      .eq("post_id", postId);
+
+    const syncedCount = count ?? 0;
+    await supabase
+      .from("posts")
+      .update({ like_count: syncedCount })
+      .eq("id", postId);
+
+    // 스토어 최종 동기화
+    set((state) => ({
+      posts: state.posts.map((p) =>
+        p.id === postId ? { ...p, like_count: syncedCount } : p,
+      ),
+      selectedPost:
+        state.selectedPost?.id === postId
+          ? { ...state.selectedPost, like_count: syncedCount }
+          : state.selectedPost,
+    }));
   },
 }));
