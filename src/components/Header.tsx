@@ -1,4 +1,3 @@
-import { useState, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   LogOut,
@@ -7,14 +6,11 @@ import {
   Shield,
   UserCog,
   Trophy,
-  Volume2,
-  VolumeOff,
   MessageSquare,
   Bell,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useOnlineCount } from "@/hooks/useOnlineCount";
-import { getSoundEnabled, setSoundEnabled } from "@/lib/sound";
 import { useNotificationStore } from "@/store/notificationStore";
 import { Button } from "@/ui/button";
 import {
@@ -36,15 +32,6 @@ export default function Header() {
   const onlineCount = useOnlineCount();
 
   const unreadCount = useNotificationStore((s) => s.unreadCount);
-
-  const [soundOn, setSoundOn] = useState(getSoundEnabled);
-  const toggleSound = useCallback(() => {
-    setSoundOn((prev) => {
-      const next = !prev;
-      setSoundEnabled(next);
-      return next;
-    });
-  }, []);
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
@@ -104,35 +91,6 @@ export default function Header() {
 
           {/* Auth area */}
           <div className="flex items-center gap-1 sm:gap-1.5">
-          {/* 사운드 토글 */}
-          <button
-            onClick={toggleSound}
-            className="p-1.5 sm:p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
-            title={soundOn ? "사운드 끄기" : "사운드 켜기"}
-          >
-            {soundOn ? (
-              <Volume2 className="h-4 w-4" />
-            ) : (
-              <VolumeOff className="h-4 w-4" />
-            )}
-          </button>
-
-          {/* 알림 벨 (로그인 시만 표시) */}
-          {user && (
-            <Link
-              to="/settings"
-              className="relative p-1.5 sm:p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
-              title="알림 설정"
-            >
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] font-bold text-white leading-none">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </Link>
-          )}
-
           {user ? (
             /* 로그인 상태: 유저 드롭다운 */
             <DropdownMenu>
