@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { Eye, Pencil } from "lucide-react";
+import { useEffect, useRef, useCallback } from "react";
+import { Eye, Pencil, Star } from "lucide-react";
 import { createChart, CandlestickSeries, LineStyle } from "lightweight-charts";
 import type { UTCTimestamp } from "lightweight-charts";
 import { useTradingStore } from "@/store/tradingStore";
+import { useAuthStore } from "@/store/authStore";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 type ChartMode = "view" | "draw";
 
@@ -18,6 +20,8 @@ const TIMEFRAMES = [
   { label: "1주", interval: "1w" },
   { label: "1월", interval: "1M" },
 ];
+
+const DEFAULT_FAVORITES = ["1m", "5m", "15m", "1h", "1d"];
 
 // ── Binance API 엔드포인트 헬퍼 (현물 API — 2017년부터 데이터 제공) ──
 function getRestUrl(interval: string, endTime?: number): string {
@@ -317,9 +321,16 @@ function ViewChart({ timeframe }: { timeframe: string }) {
 }
 
 // ══════════════════════════════════════════
-//  드로잉 모드 — TradingView Advanced Chart 위젯
+//  드로잉 모드 — TradingView Advanced Chart 위젯 (무료 Iframe 임베드)
+//
+//  ⚠ 한계: 임베드 위젯은 iframe 내부에서 동작하므로
+//  부모 페이지에서 save()/load() API 접근이 불가합니다.
+//  → 위젯 내부에서 유저가 변경한 주기(interval)나 작도(drawing)는
+//    TradingView iframe 내부 캐시(localStorage)에 의존하여 유지됩니다.
+//    client_id + user_id 를 전달하면 사용자별로 캐시가 분리됩니다.
+//    이것이 무료 임베드 위젯에서 가능한 최선의 영속화 방법입니다.
 // ══════════════════════════════════════════
-function DrawChart() {
+function DrawChart({ userId }: { userId: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -349,6 +360,10 @@ function DrawChart() {
       hide_side_toolbar: false,
       hide_legend: false,
       withdateranges: true,
+      save_image: false,
+      saveDrawings: true,
+      client_id: "modumotu",
+      user_id: userId,
       support_host: "https://www.tradingview.com",
     });
 
@@ -358,7 +373,7 @@ function DrawChart() {
     return () => {
       container.innerHTML = "";
     };
-  }, []);
+  }, [userId]);
 
   return (
     <div
@@ -372,34 +387,80 @@ function DrawChart() {
 //  메인 차트 컴포넌트
 // ══════════════════════════════════════════
 export default function TradingChart() {
-  const [mode, setMode] = useState<ChartMode>("view");
-  const [timeframe, setTimeframe] = useState("1m");
+  const [mode, setMode] = useLocalStorage<ChartMode>("chart_mode", "draw");
+  const [timeframe, setTimeframe] = useLocalStorage("chart_timeframe", "1m");
+  const [favorites, setFavorites] = useLocalStorage<string[]>(
+    "chart_favorite_timeframes",
+    DEFAULT_FAVORITES
+  );
+  const [showAll, setShowAll] = useLocalStorage("chart_show_all_tf", false);
+
+  const supabaseUserId = useAuthStore((s) => s.user?.id);
+  const tvUserId = supabaseUserId ?? "public";
+
+  const toggleFavorite = useCallback(
+    (interval: string) => {
+      setFavorites((prev) =>
+        prev.includes(interval)
+          ? prev.filter((f) => f !== interval)
+          : [...prev, interval]
+      );
+    },
+    [setFavorites]
+  );
+
+  const visibleTimeframes = showAll
+    ? TIMEFRAMES
+    : TIMEFRAMES.filter((tf) => favorites.includes(tf.interval));
 
   return (
     <div className="flex flex-col w-full h-full">
       {/* ── 차트 바깥 상단 바 (타임프레임 + 모드 토글) ── */}
       <div className="flex items-center justify-between px-2 sm:px-3 py-1.5 border-b border-border/50 shrink-0">
-        {/* 타임프레임 셀렉터 (보기 모드만 표시) */}
+        {/* 타임프레임 셀렉터 (보기 모드에서만 표시) */}
         {mode === "view" ? (
-          <div className="flex gap-0.5 overflow-x-auto scrollbar-none">
-            {TIMEFRAMES.map((tf) => (
-              <button
-                key={tf.interval}
-                onClick={() => setTimeframe(tf.interval)}
-                className={`px-1.5 sm:px-2 py-1 text-[10px] sm:text-[11px] font-medium rounded transition-colors cursor-pointer whitespace-nowrap ${
-                  timeframe === tf.interval
-                    ? "bg-indigo-500/20 text-indigo-400"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}
-              >
-                {tf.label}
-              </button>
+          <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none">
+            {visibleTimeframes.map((tf) => (
+              <div key={tf.interval} className="relative group flex">
+                <button
+                  onClick={() => setTimeframe(tf.interval)}
+                  className={`px-1.5 sm:px-2 py-1 text-[10px] sm:text-[11px] font-medium rounded transition-colors cursor-pointer whitespace-nowrap ${
+                    timeframe === tf.interval
+                      ? "bg-indigo-500/20 text-indigo-400"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {tf.label}
+                </button>
+                {showAll && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(tf.interval);
+                    }}
+                    className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  >
+                    <Star
+                      className={`h-2.5 w-2.5 ${
+                        favorites.includes(tf.interval)
+                          ? "fill-amber-400 text-amber-400"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                  </button>
+                )}
+              </div>
             ))}
+            <button
+              onClick={() => setShowAll((prev) => !prev)}
+              className="px-1.5 py-1 text-[10px] font-medium rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer whitespace-nowrap"
+              title={showAll ? "즐겨찾기만 보기" : "전체 보기"}
+            >
+              {showAll ? "접기" : "▾"}
+            </button>
           </div>
         ) : (
-          <span className="text-[10px] text-muted-foreground">
-            TradingView 드로잉 도구 사용 가능
-          </span>
+          <div />
         )}
 
         {/* 모드 토글 (우측 상단) */}
@@ -431,7 +492,11 @@ export default function TradingChart() {
 
       {/* ── 차트 본체 ── */}
       <div className="flex-1 min-h-0">
-        {mode === "view" ? <ViewChart timeframe={timeframe} /> : <DrawChart />}
+        {mode === "view" ? (
+          <ViewChart timeframe={timeframe} />
+        ) : (
+          <DrawChart userId={tvUserId} />
+        )}
       </div>
     </div>
   );

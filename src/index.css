@@ -88,6 +88,15 @@ body {
   display: none;
 }
 
+/* ── 스플래시 스크린 둥둥 애니메이션 ── */
+@keyframes splash-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.animate-splash-float {
+  animation: splash-float 2s ease-in-out infinite;
+}
+
 /* ── 호가 가격 클릭 시 반짝이는 효과 ── */
 @keyframes price-flash {
   0% {

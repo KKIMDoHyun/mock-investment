@@ -23,28 +23,18 @@ export default function LoginScreen() {
       <div className="relative z-10 w-full max-w-md">
         {/* Card */}
         <div className="bg-card/80 backdrop-blur-xl border border-border rounded-2xl shadow-2xl shadow-black/40 p-8 sm:p-10">
-          {/* Logo / Icon */}
+          {/* Logo */}
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <svg
-                className="w-8 h-8 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605"
-                />
-              </svg>
-            </div>
+            <img
+              src="/logo.png"
+              alt="모두모투"
+              className="w-16 h-16 object-contain"
+            />
           </div>
 
           {/* Title */}
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground text-center mb-2">
-            Crypto Mock
+            모두모투
           </h1>
           <p className="text-muted-foreground text-center text-sm sm:text-base mb-8">
             로그인하고 모의 거래를 시작하세요

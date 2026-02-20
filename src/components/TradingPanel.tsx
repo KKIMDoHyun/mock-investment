@@ -12,7 +12,7 @@ import {
 import { Button } from "@/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/ui/tabs";
 
-const LEVERAGE_PRESETS = [1, 2, 5, 10, 20, 50];
+const LEVERAGE_PRESETS = [1, 2, 5, 10, 25, 50, 75, 100, 125];
 const PERCENT_PRESETS = [10, 25, 50, 100];
 const TP_PRESETS = [5, 10, 25, 50]; // +%
 const SL_PRESETS = [-1, -2, -5, -10]; // -%
@@ -470,7 +470,7 @@ export default function TradingPanel() {
         <input
           type="range"
           min={1}
-          max={50}
+          max={125}
           value={leverage}
           onChange={(e) => setLeverage(Number(e.target.value))}
           className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-indigo-500
