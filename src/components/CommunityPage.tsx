@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   MessageSquare,
   Eye,
   MessageCircle,
-  ChevronLeft,
-  ChevronRight,
   PenSquare,
   Loader2,
   TrendingUp,
@@ -18,8 +16,6 @@ import { useCommunityStore } from "@/store/communityStore";
 import type { Post } from "@/store/communityStore";
 import { Button } from "@/ui/button";
 import WritePostModal from "@/components/WritePostModal";
-
-const PAGE_SIZE = 20;
 
 // ── 시간 포맷 ──
 function formatRelativeTime(dateStr: string) {
@@ -186,15 +182,25 @@ function ScrollToTopButton() {
   );
 }
 
+// ── 스크롤 위치 저장 키 ──
+const SCROLL_RESTORE_KEY = "community_restore";
+const SCROLL_Y_KEY = "community_scrollY";
+
 // ── 단일 피드 카드 ──
 function FeedCard({ post, rank }: { post: Post; rank: number | undefined }) {
   const profitData = parseProfitCard(post.content);
   const plainText = getPlainContent(post.content);
 
+  const handleClick = () => {
+    sessionStorage.setItem(SCROLL_RESTORE_KEY, "1");
+    sessionStorage.setItem(SCROLL_Y_KEY, String(window.scrollY));
+  };
+
   return (
     <Link
       to="/community/$postId"
       params={{ postId: post.id }}
+      onClick={handleClick}
       className="block bg-card border border-border rounded-2xl overflow-hidden hover:border-indigo-500/30 transition-colors no-underline"
     >
       <div className="px-4 py-3 space-y-2.5">
@@ -249,22 +255,79 @@ function FeedCard({ post, rank }: { post: Post; rank: number | undefined }) {
 // ── 메인 페이지 ──
 export default function CommunityPage() {
   const user = useAuthStore((s) => s.user);
-  const { posts, totalCount, page, loading, fetchPosts, userRanks, fetchUserRanks } = useCommunityStore();
+  const {
+    posts,
+    loading,
+    loadingMore,
+    hasMore,
+    fetchPosts,
+    fetchNextPage,
+    resetPosts,
+    userRanks,
+    fetchUserRanks,
+  } = useCommunityStore();
   const [writeOpen, setWriteOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([fetchPosts(page), fetchUserRanks()]);
-    setRefreshing(false);
-  };
+  // IntersectionObserver 감지용 ref
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const initRef = useRef(false);
 
+  // 초기 로드 또는 스크롤 복원
   useEffect(() => {
-    fetchPosts(0);
-    fetchUserRanks();
-  }, [fetchPosts, fetchUserRanks]);
+    // StrictMode 이중 실행 방지
+    if (initRef.current) return;
+    initRef.current = true;
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+    const shouldRestore = sessionStorage.getItem(SCROLL_RESTORE_KEY);
+    const storePosts = useCommunityStore.getState().posts;
+
+    if (shouldRestore && storePosts.length > 0) {
+      // 뒤로 가기: 기존 데이터 유지, 스크롤 복원
+      const savedY = Number(sessionStorage.getItem(SCROLL_Y_KEY)) || 0;
+      sessionStorage.removeItem(SCROLL_RESTORE_KEY);
+      sessionStorage.removeItem(SCROLL_Y_KEY);
+
+      // 렌더링 완료 후 스크롤 복원
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.scrollTo(0, savedY);
+        });
+      });
+    } else {
+      // 새로 진입: 초기화 후 첫 페이지 로드
+      sessionStorage.removeItem(SCROLL_RESTORE_KEY);
+      sessionStorage.removeItem(SCROLL_Y_KEY);
+      fetchPosts();
+      fetchUserRanks();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 무한스크롤: 하단 감지 시 다음 페이지 로드
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, fetchNextPage]);
+
+  // 새로고침
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([resetPosts(), fetchUserRanks()]);
+    setRefreshing(false);
+  }, [resetPosts, fetchUserRanks]);
 
   return (
     <main className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
@@ -311,40 +374,23 @@ export default function CommunityPage() {
           </p>
         </div>
       ) : (
-        <>
-          <div className="space-y-3">
-            {posts.map((post) => (
-              <FeedCard key={post.id} post={post} rank={userRanks[post.user_id]} />
-            ))}
-          </div>
+        <div className="space-y-3">
+          {posts.map((post) => (
+            <FeedCard key={post.id} post={post} rank={userRanks[post.user_id]} />
+          ))}
 
-          {/* 페이지네이션 */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-6">
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl"
-                disabled={page === 0}
-                onClick={() => fetchPosts(page - 1)}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {page + 1} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl"
-                disabled={page >= totalPages - 1}
-                onClick={() => fetchPosts(page + 1)}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-        </>
+          {/* 무한스크롤 감지 영역 + 로딩 스피너 */}
+          <div ref={bottomRef} className="flex justify-center py-4">
+            {loadingMore && (
+              <Loader2 className="h-5 w-5 text-indigo-400 animate-spin" />
+            )}
+            {!hasMore && posts.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                모든 게시글을 불러왔습니다.
+              </p>
+            )}
+          </div>
+        </div>
       )}
 
       {/* 글쓰기 모달 */}

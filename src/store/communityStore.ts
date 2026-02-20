@@ -30,7 +30,7 @@ export interface Comment {
   avatar_url: string | null;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 // ── PnL 계산 (tradingStore와 동일 로직, 순환 의존 방지를 위해 인라인) ──
 function calcUnrealizedPnl(
@@ -49,11 +49,13 @@ function calcUnrealizedPnl(
 }
 
 interface CommunityState {
-  // 게시글 목록
+  // 게시글 목록 (무한스크롤)
   posts: Post[];
   totalCount: number;
   page: number;
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
 
   // 게시글 상세
   selectedPost: Post | null;
@@ -67,7 +69,10 @@ interface CommunityState {
   userRanks: Record<string, number>;
 
   // 액션
-  fetchPosts: (page?: number) => Promise<void>;
+  _fetchPage: (page: number) => Promise<Post[]>;
+  fetchPosts: () => Promise<void>;
+  fetchNextPage: () => Promise<void>;
+  resetPosts: () => Promise<void>;
   fetchPostById: (postId: string) => Promise<void>;
   fetchUserRanks: () => Promise<void>;
   createPost: (params: {
@@ -93,6 +98,8 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
   totalCount: 0,
   page: 0,
   loading: false,
+  loadingMore: false,
+  hasMore: true,
 
   selectedPost: null,
   postLoading: false,
@@ -162,17 +169,10 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
     set({ userRanks: ranks });
   },
 
-  // ── 게시글 목록 ──
-  fetchPosts: async (page = 0) => {
-    set({ loading: true });
-
+  // ── 게시글 페이지 로드 (내부 공용) ──
+  _fetchPage: async (page: number): Promise<Post[]> => {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
-
-    // 총 개수 조회
-    const { count } = await supabase
-      .from("posts")
-      .select("id", { count: "exact", head: true });
 
     const { data, error } = await supabase
       .from("posts")
@@ -182,11 +182,11 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
 
     if (error) {
       console.error("게시글 목록 로드 에러:", error.message);
-      set({ loading: false });
-      return;
+      return [];
     }
 
     const rows = data ?? [];
+    if (rows.length === 0) return [];
 
     // 프로필 정보 일괄 조회
     const userIds = [...new Set(rows.map((r) => r.user_id as string))];
@@ -222,7 +222,7 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
       }
     }
 
-    const posts: Post[] = rows.map((r) => {
+    return rows.map((r) => {
       const profile = profileMap.get(r.user_id as string);
       return {
         id: r.id as string,
@@ -238,8 +238,49 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
         avatar_url: profile?.avatar_url ?? null,
       };
     });
+  },
 
-    set({ posts, totalCount: count ?? 0, page, loading: false });
+  // ── 첫 페이지 로드 (초기 로딩) ──
+  fetchPosts: async () => {
+    set({ loading: true, posts: [], page: 0, hasMore: true });
+
+    const { count } = await supabase
+      .from("posts")
+      .select("id", { count: "exact", head: true });
+
+    const totalCount = count ?? 0;
+    const posts = await get()._fetchPage(0);
+
+    set({
+      posts,
+      totalCount,
+      page: 0,
+      hasMore: posts.length >= PAGE_SIZE,
+      loading: false,
+    });
+  },
+
+  // ── 다음 페이지 로드 (무한스크롤) ──
+  fetchNextPage: async () => {
+    const { hasMore, loadingMore, loading } = get();
+    if (!hasMore || loadingMore || loading) return;
+
+    const nextPage = get().page + 1;
+    set({ loadingMore: true });
+
+    const newPosts = await get()._fetchPage(nextPage);
+
+    set((state) => ({
+      posts: [...state.posts, ...newPosts],
+      page: nextPage,
+      hasMore: newPosts.length >= PAGE_SIZE,
+      loadingMore: false,
+    }));
+  },
+
+  // ── 새로고침 (리스트 초기화 후 첫 페이지 다시 로드) ──
+  resetPosts: async () => {
+    await get().fetchPosts();
   },
 
   // ── 게시글 상세 ──
@@ -301,7 +342,7 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
     }
 
     // 목록 새로고침
-    await get().fetchPosts(get().page);
+    await get().resetPosts();
     return { success: true, message: "게시글이 작성되었습니다.", postId: data?.id as string };
   },
 
@@ -313,7 +354,7 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
       return { success: false, message: error.message };
     }
 
-    await get().fetchPosts(get().page);
+    await get().resetPosts();
     return { success: true, message: "게시글이 삭제되었습니다." };
   },
 
