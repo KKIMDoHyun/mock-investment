@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { UserCircle, Camera, Loader2 } from "lucide-react";
+import { UserCircle, Camera, Loader2, AlertTriangle, Trash2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
@@ -12,12 +13,18 @@ export default function ProfilePage() {
   const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const updateNickname = useAuthStore((s) => s.updateNickname);
   const updateAvatar = useAuthStore((s) => s.updateAvatar);
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
   const navigate = useNavigate();
 
   const [newNickname, setNewNickname] = useState(nickname ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // 회원 탈퇴 모달
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [confirmInput, setConfirmInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -54,6 +61,21 @@ export default function ProfilePage() {
       toast.success(result.message);
     } else {
       setError(result.message);
+    }
+  };
+
+  // ── 회원 탈퇴 ──
+  const handleDeleteAccount = async () => {
+    if (confirmInput !== "탈퇴") return;
+    setDeleting(true);
+    const result = await deleteAccount();
+    setDeleting(false);
+    if (result.success) {
+      toast.success(result.message);
+      setDeleteModalOpen(false);
+      navigate({ to: "/" });
+    } else {
+      toast.error(result.message);
     }
   };
 
@@ -237,6 +259,99 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* ── 위험 구역 (Danger Zone) ── */}
+      <div className="border border-red-500/30 rounded-xl overflow-hidden">
+        {/* 헤더 */}
+        <div className="bg-red-500/5 border-b border-red-500/20 px-4 sm:px-6 py-3 flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-red-400 flex-shrink-0" />
+          <h2 className="text-sm font-semibold text-red-400">위험 구역</h2>
+        </div>
+
+        {/* 내용 */}
+        <div className="px-4 sm:px-6 py-4 sm:py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">회원 탈퇴</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              계정을 삭제하면 모든 모의투자 기록, 게시글, 댓글이 영구적으로 삭제됩니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setConfirmInput(""); setDeleteModalOpen(true); }}
+            className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-500/40 bg-red-500/5 text-red-400 hover:bg-red-500/15 hover:border-red-500/60 text-sm font-medium transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            회원 탈퇴
+          </button>
+        </div>
+      </div>
+
+      {/* ── 탈퇴 확인 모달 ── */}
+      <Dialog open={deleteModalOpen} onOpenChange={(v) => { if (!deleting) { setDeleteModalOpen(v); setConfirmInput(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-400">
+              <AlertTriangle className="h-5 w-5" />
+              회원 탈퇴 확인
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* 경고 박스 */}
+          <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 space-y-1.5 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">삭제되는 데이터 목록:</p>
+            <ul className="space-y-1 text-xs list-disc list-inside marker:text-red-400">
+              <li>모든 모의투자 거래 기록 및 포트폴리오</li>
+              <li>작성한 커뮤니티 게시글 및 댓글</li>
+              <li>추천(좋아요) 기록</li>
+              <li>프로필 정보 및 설정</li>
+            </ul>
+            <p className="text-xs text-red-400/80 pt-1">
+              ⚠️ 이 작업은 되돌릴 수 없습니다.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              탈퇴를 진행하려면 아래 입력창에{" "}
+              <strong className="text-foreground font-semibold">탈퇴</strong>를 입력해 주세요.
+            </p>
+            <Input
+              value={confirmInput}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmInput(e.target.value)}
+              placeholder="탈퇴"
+              className="h-10"
+              disabled={deleting}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === "Enter" && confirmInput === "탈퇴" && !deleting) handleDeleteAccount();
+              }}
+            />
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => { setDeleteModalOpen(false); setConfirmInput(""); }}
+              disabled={deleting}
+            >
+              취소
+            </Button>
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              disabled={confirmInput !== "탈퇴" || deleting}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+            >
+              {deleting ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />처리 중...</>
+              ) : (
+                <><Trash2 className="h-4 w-4" />영구 탈퇴</>
+              )}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

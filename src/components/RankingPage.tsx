@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Trophy, Loader2, TrendingUp, DollarSign, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { Seo } from "@/hooks/useSeo";
 
 // ── PnL 계산 (tradingStore의 calcPnl과 동일 로직, 순환 의존 방지를 위해 인라인) ──
 function calcUnrealizedPnl(
@@ -639,6 +640,8 @@ export default function RankingPage() {
   }
 
   return (
+    <>
+    <Seo title="랭킹" description="모두모투 트레이더 수익률·수익금·총자산 랭킹. 상위 15위까지 실시간 확인." url="/ranking" />
     <main className="flex-1 w-full max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-8 flex flex-col gap-4 sm:gap-5">
       {/* ── 헤더 ── */}
       <div className="flex items-center gap-3">
@@ -658,5 +661,6 @@ export default function RankingPage() {
       <RoeRankingTable users={users} />
       <ProfitRankingTable users={users} />
     </main>
+    </>
   );
 }

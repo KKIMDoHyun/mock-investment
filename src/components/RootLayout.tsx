@@ -11,11 +11,13 @@ import {
 import type { SymbolId } from "@/store/tradingStore";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import NicknameSetupModal from "@/components/NicknameSetupModal";
 import TermsAgreementModal from "@/components/TermsAgreementModal";
 import ChatWidget from "@/components/ChatWidget";
 import InAppBrowserGuard from "@/components/InAppBrowserGuard";
 import SplashScreen from "@/components/SplashScreen";
+import { Seo } from "@/hooks/useSeo";
 
 const MIN_SPLASH_MS = 2000;
 
@@ -122,11 +124,13 @@ export default function RootLayout() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <Seo />
       <SplashScreen isLoading={!isAppReady} />
       <InAppBrowserGuard />
       <TermsAgreementModal />
       <Header />
       <Outlet />
+      <Footer />
       <NicknameSetupModal />
       <ChatWidget />
       <Toaster

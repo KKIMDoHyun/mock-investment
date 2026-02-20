@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
+import { Seo } from "@/hooks/useSeo";
 import {
   MessageSquare,
   Eye,
@@ -399,6 +400,8 @@ export default function CommunityPage() {
   );
 
   return (
+    <>
+    <Seo title="커뮤니티" description="모두모투 트레이더들의 투자 이야기. 수익 인증, 시황 분석, 자유로운 소통." url="/community" />
     <main className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-5">
@@ -505,5 +508,6 @@ export default function CommunityPage() {
         }}
       />
     </main>
+    </>
   );
 }

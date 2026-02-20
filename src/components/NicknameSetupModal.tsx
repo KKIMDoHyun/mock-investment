@@ -14,6 +14,8 @@ import {
 export default function NicknameSetupModal() {
   const user = useAuthStore((s) => s.user);
   const nickname = useAuthStore((s) => s.nickname);
+  const termsAgreedAt = useAuthStore((s) => s.termsAgreedAt);
+  const roleLoaded = useAuthStore((s) => s.roleLoaded);
   const updateNickname = useAuthStore((s) => s.updateNickname);
 
   const [newNickname, setNewNickname] = useState("");
@@ -21,9 +23,9 @@ export default function NicknameSetupModal() {
   const [error, setError] = useState("");
   const [dismissed, setDismissed] = useState(false);
 
-  // user_ 로 시작하는 랜덤 닉네임일 때만 표시 (유저가 닫으면 dismissed)
+  // 약관 동의가 완료된 이후에만 표시 (TermsAgreementModal과 동시에 뜨지 않도록)
   const isRandomNickname = nickname?.startsWith("user_") ?? false;
-  const isOpen = !!user && isRandomNickname && !dismissed;
+  const isOpen = !!user && roleLoaded && !!termsAgreedAt && isRandomNickname && !dismissed;
 
   const handleSubmit = async () => {
     if (!newNickname.trim()) {

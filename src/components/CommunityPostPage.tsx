@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
+import { Seo } from "@/hooks/useSeo";
 import {
   ArrowLeft,
   ArrowUp,
@@ -676,6 +677,12 @@ export default function CommunityPostPage() {
   }
 
   return (
+    <>
+    <Seo
+      title={post.title}
+      description={post.content.replace(/\[PROFIT_CARD\][\s\S]*?\[\/PROFIT_CARD\]/g, "").slice(0, 120).trim() || post.title}
+      url={`/community/${post.id}`}
+    />
     <main className="flex-1 w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
       {/* 상단 네비 */}
       <button
@@ -692,26 +699,26 @@ export default function CommunityPostPage() {
         <h1 className="text-lg sm:text-xl font-bold text-foreground mb-3">
           {post.title}
         </h1>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
               <UserAvatar
                 nickname={post.nickname}
                 avatarUrl={post.avatar_url}
                 size="md"
               />
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-sm font-medium text-foreground truncate max-w-[150px] sm:max-w-none">
                 {post.nickname}
               </span>
               <RankBadge rank={userRanks[post.user_id]} />
             </div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
+                <Clock className="h-3 w-3 flex-shrink-0" />
                 {formatDateTime(post.created_at)}
               </span>
               <span className="flex items-center gap-1">
-                <Eye className="h-3 w-3" />
+                <Eye className="h-3 w-3 flex-shrink-0" />
                 {post.view_count}
               </span>
             </div>
@@ -828,5 +835,6 @@ export default function CommunityPostPage() {
       {/* 맨 위로 버튼 */}
       <ScrollToTopButton />
     </main>
+    </>
   );
 }

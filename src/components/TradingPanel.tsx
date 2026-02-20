@@ -739,6 +739,11 @@ export default function TradingPanel() {
           거래하려면 로그인이 필요합니다
         </p>
       )}
+
+      {/* 면책 문구 */}
+      <p className="text-[10px] text-center text-muted-foreground/35 pt-1 leading-relaxed">
+        본 서비스는 모의투자 게임입니다. 실제 투자가 아닙니다.
+      </p>
     </div>
   );
 }

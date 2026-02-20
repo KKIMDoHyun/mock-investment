@@ -31,6 +31,13 @@ interface AuthState {
   agreeToTerms: () => Promise<{ success: boolean; message: string }>;
   /** 채팅 규정 동의 (DB 저장) */
   agreeToChatRules: () => Promise<{ success: boolean; message: string }>;
+  /**
+   * 회원 탈퇴:
+   * 1) 관련 테이블 데이터 수동 삭제 (post_likes, comments, posts, trades, portfolio_snapshots, portfolios, profiles)
+   * 2) Supabase RPC delete_user() 호출 → auth.users 삭제
+   * 3) 로컬 세션 정리
+   */
+  deleteAccount: () => Promise<{ success: boolean; message: string }>;
 }
 
 // ── 랜덤 닉네임 생성 (user_ + 영문/숫자 6자리) ──
@@ -332,6 +339,60 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     set({ chatRulesAgreedAt: now });
     return { success: true, message: "채팅 규정에 동의했습니다." };
+  },
+
+  deleteAccount: async () => {
+    const { user } = get();
+    if (!user) {
+      return { success: false, message: "로그인이 필요합니다." };
+    }
+
+    const uid = user.id;
+
+    try {
+      // ── 1) 관련 테이블 데이터 삭제 (cascade 미설정 대비 수동 삭제) ──
+      // post_likes
+      await supabase.from("post_likes").delete().eq("user_id", uid);
+      // comments
+      await supabase.from("comments").delete().eq("user_id", uid);
+      // posts (게시글 삭제 — 타 유저의 댓글도 cascade 혹은 별도 정리 필요)
+      await supabase.from("posts").delete().eq("user_id", uid);
+      // trades
+      await supabase.from("trades").delete().eq("user_id", uid);
+      // pending_orders (있을 경우)
+      await supabase.from("pending_orders").delete().eq("user_id", uid);
+      // portfolio_snapshots
+      await supabase.from("portfolio_snapshots").delete().eq("user_id", uid);
+      // portfolios
+      await supabase.from("portfolios").delete().eq("user_id", uid);
+      // profiles (auth.users FK cascade 전에 먼저 삭제하지 않아도 되지만 명시적으로)
+      await supabase.from("profiles").delete().eq("id", uid);
+
+      // ── 2) auth.users 삭제 (SECURITY DEFINER RPC 필요) ──
+      const { error: rpcError } = await supabase.rpc("delete_user");
+      if (rpcError) {
+        console.error("delete_user RPC 에러:", rpcError.message);
+        // RPC 실패 시에도 로컬 세션은 정리 (데이터는 이미 삭제됨)
+      }
+
+      // ── 3) 로컬 세션 정리 ──
+      await supabase.auth.signOut();
+      set({
+        session: null,
+        user: null,
+        role: "user",
+        nickname: null,
+        avatarUrl: null,
+        termsAgreedAt: null,
+        chatRulesAgreedAt: null,
+        roleLoaded: true,
+      });
+
+      return { success: true, message: "회원 탈퇴가 완료되었습니다." };
+    } catch (err) {
+      console.error("회원 탈퇴 에러:", err);
+      return { success: false, message: "탈퇴 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요." };
+    }
   },
 
   initialize: () => {

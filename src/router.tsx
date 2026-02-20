@@ -7,6 +7,9 @@ import { profileRoute } from "./routes/profile";
 import { rankingRoute } from "./routes/ranking";
 import { communityRoute } from "./routes/community";
 import { communityPostRoute } from "./routes/communityPost";
+import { privacyRoute } from "./routes/privacy";
+import { termsRoute } from "./routes/terms";
+import { contactRoute } from "./routes/contact";
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -16,6 +19,9 @@ const routeTree = rootRoute.addChildren([
   rankingRoute,
   communityRoute,
   communityPostRoute,
+  privacyRoute,
+  termsRoute,
+  contactRoute,
 ]);
 
 export const router = createRouter({ routeTree });

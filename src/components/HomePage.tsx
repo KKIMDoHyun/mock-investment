@@ -211,27 +211,32 @@ export default function HomePage() {
   ]);
 
   return (
-    <main className="flex-1 w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col gap-2 sm:gap-4">
+    <main className="flex-1 w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col gap-2 sm:gap-3">
       {/* ── 상단 종목 정보 바 ── */}
       <SymbolBar />
 
       {/* ── 차트 + 호가창 + 주문 패널 ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_180px_320px] gap-2 sm:gap-4 flex-1">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_180px_320px] gap-2 sm:gap-3">
         {/* 모바일: 차트/호가 탭 전환 */}
         <MobileChartOrderBook />
 
         {/* 데스크탑: 차트 (항상 보임) */}
-        <div className="hidden lg:block bg-card border border-border rounded-xl overflow-hidden lg:min-h-[500px]">
+        <div className="hidden lg:flex lg:flex-col bg-card border border-border rounded-xl overflow-hidden"
+             style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}>
           <TradingChart />
         </div>
 
         {/* 데스크탑: 호가창 (항상 보임) */}
-        <div className="hidden lg:block lg:max-h-[500px]">
+        <div className="hidden lg:block overflow-hidden rounded-xl"
+             style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}>
           <OrderBook />
         </div>
 
         {/* 주문 패널 */}
-        <TradingPanel />
+        <div className="lg:overflow-y-auto lg:rounded-xl"
+             style={{ maxHeight: "calc(100dvh - 220px)" }}>
+          <TradingPanel />
+        </div>
       </div>
 
       {/* ── 하단: 포지션 / 거래 내역 ── */}
