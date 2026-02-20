@@ -75,29 +75,27 @@ export default function Header() {
             </div>
           )}
 
-          {/* 내 정보 / 랭킹 바로가기 */}
-          {user && (
-            <nav className="flex items-center gap-0.5">
-              <Link
-                to="/ranking"
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
-              >
-                <Trophy className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">랭킹</span>
-              </Link>
-              <Link
-                to="/community"
-                onClick={() => {
-                  sessionStorage.removeItem("community_restore");
-                  sessionStorage.removeItem("community_scrollY");
-                }}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">커뮤니티</span>
-              </Link>
-            </nav>
-          )}
+          {/* 랭킹 / 커뮤니티 바로가기 */}
+          <nav className="flex items-center gap-0.5">
+            <Link
+              to="/ranking"
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
+            >
+              <Trophy className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">랭킹</span>
+            </Link>
+            <Link
+              to="/community"
+              onClick={() => {
+                sessionStorage.removeItem("community_restore");
+                sessionStorage.removeItem("community_scrollY");
+              }}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">커뮤니티</span>
+            </Link>
+          </nav>
           </div>
 
           {/* Auth area */}

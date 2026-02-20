@@ -758,7 +758,13 @@ export default function CommunityPostPage() {
                   replies={commentTree.repliesMap.get(comment.id) ?? []}
                   isAuthor={comment.user_id === post.user_id}
                   currentUserId={user?.id}
-                  onReply={(parentId) => setReplyingTo(parentId)}
+                  onReply={(parentId) => {
+                    if (!user) {
+                      toast.error("로그인 후 답글을 작성할 수 있습니다.");
+                      return;
+                    }
+                    setReplyingTo(parentId);
+                  }}
                   onDelete={handleDeleteComment}
                 />
 

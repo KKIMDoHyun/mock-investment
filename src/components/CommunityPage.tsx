@@ -11,6 +11,7 @@ import {
   Trophy,
   RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import { useCommunityStore } from "@/store/communityStore";
 import type { Post } from "@/store/communityStore";
@@ -158,8 +159,8 @@ function RankBadge({ rank }: { rank: number | undefined }) {
   );
 }
 
-// ── 맨 위로 버튼 ──
-function ScrollToTopButton() {
+// ── 하단 플로팅 버튼 그룹 (맨 위로 + 글쓰기) ──
+function BottomFloatingButtons({ onWrite }: { onWrite: () => void }) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -171,14 +172,24 @@ function ScrollToTopButton() {
   if (!visible) return null;
 
   return (
-    <button
-      type="button"
-      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-medium rounded-full shadow-lg transition-colors"
-    >
-      <ArrowUp className="h-3.5 w-3.5" />
-      맨 위로
-    </button>
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-medium rounded-full shadow-lg transition-colors"
+      >
+        <ArrowUp className="h-3.5 w-3.5" />
+        맨 위로
+      </button>
+      <button
+        type="button"
+        onClick={onWrite}
+        className="flex items-center gap-1.5 px-4 py-2 bg-card border border-border text-muted-foreground hover:text-foreground hover:border-indigo-500/40 text-xs font-medium rounded-full shadow-lg transition-colors"
+      >
+        <PenSquare className="h-3.5 w-3.5" />
+        글쓰기
+      </button>
+    </div>
   );
 }
 
@@ -346,16 +357,20 @@ export default function CommunityPage() {
           </button>
         </div>
 
-        {user && (
-          <Button
-            size="sm"
-            className="gap-1.5 rounded-xl"
-            onClick={() => setWriteOpen(true)}
-          >
-            <PenSquare className="h-3.5 w-3.5" />
-            글쓰기
-          </Button>
-        )}
+        <Button
+          size="sm"
+          className="gap-1.5 rounded-xl"
+          onClick={() => {
+            if (!user) {
+              toast.error("로그인 후 글을 작성할 수 있습니다.");
+              return;
+            }
+            setWriteOpen(true);
+          }}
+        >
+          <PenSquare className="h-3.5 w-3.5" />
+          글쓰기
+        </Button>
       </div>
 
       {/* 피드 */}
@@ -396,8 +411,16 @@ export default function CommunityPage() {
       {/* 글쓰기 모달 */}
       <WritePostModal open={writeOpen} onOpenChange={setWriteOpen} />
 
-      {/* 맨 위로 버튼 */}
-      <ScrollToTopButton />
+      {/* 하단 플로팅 버튼 */}
+      <BottomFloatingButtons
+        onWrite={() => {
+          if (!user) {
+            toast.error("로그인 후 글을 작성할 수 있습니다.");
+            return;
+          }
+          setWriteOpen(true);
+        }}
+      />
     </main>
   );
 }
