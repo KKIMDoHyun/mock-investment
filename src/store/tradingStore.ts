@@ -3,6 +3,26 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { playSuccessSound, playErrorSound, playCheckSound } from "@/lib/sound";
 
+// ── 시스템 메시지 (채팅 공지) ──
+
+async function fetchNickname(userId: string): Promise<string> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("nickname")
+    .eq("id", userId)
+    .single();
+  return (data?.nickname as string) || "익명";
+}
+
+const SYSTEM_MSG_PREFIX = "[SYSTEM]";
+
+async function sendSystemMessage(userId: string, content: string): Promise<void> {
+  const { error } = await supabase
+    .from("messages")
+    .insert({ user_id: userId, content: `${SYSTEM_MSG_PREFIX}${content}` });
+  if (error) console.error("시스템 메시지 전송 에러:", error.message);
+}
+
 // ── 수수료율 상수 ──
 
 /** 시장가(Taker) 수수료 0.04% */
@@ -106,10 +126,11 @@ interface TradingState {
     entryPrice: number;
   }) => Promise<{ success: boolean; message: string }>;
 
-  /** 포지션 종료 (시장가) */
+  /** 포지션 종료 (시장가). source: "manual" | "tp_sl" | "liquidation" */
   closePosition: (
     tradeId: string,
-    closePrice: number
+    closePrice: number,
+    source?: "manual" | "tp_sl" | "liquidation"
   ) => Promise<{ success: boolean; message: string }>;
 
   /** 지정가 주문 제출 */
@@ -393,10 +414,9 @@ async function checkLiquidation(currentPrice: number) {
       }
 
       if (shouldLiquidate) {
-        // 강제 청산: 청산가에서 포지션 종료 (증거금 전액 손실)
         const result = await useTradingStore
           .getState()
-          .closePosition(trade.id, liqPrice);
+          .closePosition(trade.id, liqPrice, "liquidation");
 
         if (result.success) {
           toast.error(
@@ -461,7 +481,7 @@ async function checkTpSlPositions(currentPrice: number) {
       if (closePrice > 0) {
         const result = await useTradingStore
           .getState()
-          .closePosition(trade.id, closePrice);
+          .closePosition(trade.id, closePrice, "tp_sl");
         if (result.success) {
           toast.info(
             `${reason} 체결! ${trade.position_type} ${
@@ -952,7 +972,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   },
 
   // ── 포지션 종료 ──
-  closePosition: async (tradeId, closePrice) => {
+  closePosition: async (tradeId, closePrice, source = "manual") => {
     const { positions, balance } = get();
     const trade = positions.find((p) => p.id === tradeId);
 
@@ -1019,6 +1039,28 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
     const pnlText =
       pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
+
+    // 시스템 메시지 발송 (비동기, 실패해도 매매 결과에 영향 없음)
+    const roe = trade.margin > 0 ? (pnl / trade.margin) * 100 : 0;
+    const roeText = roe >= 0 ? `+${roe.toFixed(2)}` : roe.toFixed(2);
+
+    const pnlSign = pnl >= 0 ? "+" : "-";
+    const pnlAbs = Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    fetchNickname(trade.user_id).then((nick) => {
+      if (source === "liquidation") {
+        sendSystemMessage(
+          trade.user_id,
+          `🔥 청산 알림: ${nick}님이 BTCUSDT ${trade.position_type} ${trade.leverage}x 포지션에서 강제 청산당했습니다. (${roeText}% / ${pnlSign}$${pnlAbs})`
+        );
+      } else {
+        const label = pnl >= 0 ? "익절" : "손절";
+        sendSystemMessage(
+          trade.user_id,
+          `${label} 알림: ${nick}님이 BTCUSDT ${trade.position_type} ${trade.leverage}x 포지션을 ${roeText}% (${pnlSign}$${pnlAbs}) 수익으로 종료했습니다!`
+        );
+      }
+    }).catch(() => {});
 
     return {
       success: true,

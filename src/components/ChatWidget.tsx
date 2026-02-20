@@ -14,6 +14,8 @@ import { useAuthStore } from "@/store/authStore";
 import { useTradingStore, calcPnl } from "@/store/tradingStore";
 import type { Trade } from "@/store/tradingStore";
 
+const SYSTEM_MSG_PREFIX = "[SYSTEM]";
+
 // ── 타입 ──
 interface ChatMessage {
   id: string;
@@ -489,14 +491,21 @@ export default function ChatWidget() {
 
     const enriched = await Promise.all(
       rows.map(async (row) => {
-        const profile = await fetchUserProfile(row.user_id as string);
+        const userId = row.user_id as string;
+        const rawContent = row.content as string;
+        const isSystem = rawContent.startsWith(SYSTEM_MSG_PREFIX);
+
+        const profile = userId
+          ? await fetchUserProfile(userId)
+          : { nickname: "익명", avatarUrl: null };
+
         return {
           id: row.id as string,
-          user_id: row.user_id as string,
-          content: row.content as string,
+          user_id: isSystem ? "system" : userId,
+          content: isSystem ? rawContent.slice(SYSTEM_MSG_PREFIX.length) : rawContent,
           created_at: row.created_at as string,
-          nickname: profile.nickname,
-          avatar_url: profile.avatarUrl,
+          nickname: isSystem ? "📢 알림" : profile.nickname,
+          avatar_url: isSystem ? null : (profile.avatarUrl ?? null),
         };
       })
     );
@@ -557,15 +566,20 @@ export default function ChatWidget() {
             created_at: string;
           };
 
-          const profile = await fetchUserProfile(row.user_id);
+          const rawContent = row.content as string;
+          const isSystem = rawContent.startsWith(SYSTEM_MSG_PREFIX);
+
+          const profile = row.user_id
+            ? await fetchUserProfile(row.user_id)
+            : { nickname: "익명", avatarUrl: null };
 
           const newMsg: ChatMessage = {
             id: row.id,
-            user_id: row.user_id,
-            content: row.content,
+            user_id: isSystem ? "system" : row.user_id,
+            content: isSystem ? rawContent.slice(SYSTEM_MSG_PREFIX.length) : rawContent,
             created_at: row.created_at,
-            nickname: profile.nickname,
-            avatar_url: profile.avatarUrl,
+            nickname: isSystem ? "📢 알림" : profile.nickname,
+            avatar_url: isSystem ? null : profile.avatarUrl,
           };
 
           setMessages((prev) => [...prev, newMsg]);
@@ -760,10 +774,24 @@ export default function ChatWidget() {
                   </div>
                 ) : (
                   messages.map((msg) => {
-                    const isMe = user?.id === msg.user_id;
+                    const isSystem = msg.user_id === "system";
+                    const isMe = !isSystem && user?.id === msg.user_id;
                     const posData = isPositionMessage(msg.content)
                       ? parsePositionMessage(msg.content)
                       : null;
+
+                    if (isSystem) {
+                      return (
+                        <div
+                          key={msg.id}
+                          className="flex justify-center px-2 py-1"
+                        >
+                          <div className="max-w-[90%] px-3 py-1.5 rounded-xl text-xs text-center bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                            {msg.content}
+                          </div>
+                        </div>
+                      );
+                    }
 
                     return (
                       <div

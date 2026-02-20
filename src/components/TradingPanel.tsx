@@ -326,10 +326,10 @@ export default function TradingPanel() {
             <button
               onClick={handleRefill}
               disabled={refilling || balance >= 1_000_000 || refillTickets <= 0}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
-                balance < 1_000_000 && refillTickets > 0
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                balance < 1_000_000 && refillTickets > 0 && !refilling
                   ? "bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 cursor-pointer"
-                  : "bg-secondary text-muted-foreground/50 cursor-not-allowed"
+                  : "bg-secondary text-muted-foreground/50 cursor-not-allowed pointer-events-none"
               }`}
             >
               <Ticket className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
