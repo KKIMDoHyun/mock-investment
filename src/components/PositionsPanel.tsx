@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -79,7 +80,10 @@ function PriceSkeleton({ className }: { className?: string }) {
 
 // ── 개별 OPEN 포지션 행 (데스크탑 테이블용) ──
 function PositionRow({ trade }: { trade: Trade }) {
+  const navigate = useNavigate();
   const prices = useTradingStore((s) => s.prices);
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const setSelectedSymbol = useTradingStore((s) => s.setSelectedSymbol);
   const tradePrice = prices[trade.symbol as SymbolId] || 0;
   const closePosition = useTradingStore((s) => s.closePosition);
   const [closing, setClosing] = useState(false);
@@ -87,8 +91,17 @@ function PositionRow({ trade }: { trade: Trade }) {
   const priceReady = tradePrice > 0;
   const { pnl, roe, liqPrice } = calcPnl(trade, tradePrice);
   const isProfit = pnl >= 0;
+  const isCurrentSymbol = trade.symbol === selectedSymbol;
 
-  const handleClose = useCallback(async () => {
+  const handleNavigate = useCallback(() => {
+    if (trade.symbol !== selectedSymbol) {
+      setSelectedSymbol(trade.symbol);
+    }
+    navigate({ to: "/", search: { symbol: trade.symbol }, replace: true });
+  }, [trade.symbol, selectedSymbol, setSelectedSymbol, navigate]);
+
+  const handleClose = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
     setClosing(true);
     const result = await closePosition(trade.id, tradePrice);
     setClosing(false);
@@ -101,7 +114,10 @@ function PositionRow({ trade }: { trade: Trade }) {
   }, [trade.id, tradePrice, closePosition]);
 
   return (
-    <tr className="border-b border-border/50 hover:bg-accent/20 transition-colors">
+    <tr
+      onClick={handleNavigate}
+      className={`border-b border-border/50 hover:bg-accent/20 transition-colors cursor-pointer ${isCurrentSymbol ? "bg-accent/10" : ""}`}
+    >
       {/* 종목 */}
       <td className="py-2.5 px-3">
         <div className="flex items-center gap-2">
@@ -192,7 +208,10 @@ function PositionRow({ trade }: { trade: Trade }) {
 
 // ── 개별 OPEN 포지션 카드 (모바일용) ──
 function PositionCard({ trade }: { trade: Trade }) {
+  const navigate = useNavigate();
   const prices = useTradingStore((s) => s.prices);
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const setSelectedSymbol = useTradingStore((s) => s.setSelectedSymbol);
   const tradePrice = prices[trade.symbol as SymbolId] || 0;
   const closePosition = useTradingStore((s) => s.closePosition);
   const [closing, setClosing] = useState(false);
@@ -200,8 +219,17 @@ function PositionCard({ trade }: { trade: Trade }) {
   const priceReady = tradePrice > 0;
   const { pnl, roe, liqPrice } = calcPnl(trade, tradePrice);
   const isProfit = pnl >= 0;
+  const isCurrentSymbol = trade.symbol === selectedSymbol;
 
-  const handleClose = useCallback(async () => {
+  const handleNavigate = useCallback(() => {
+    if (trade.symbol !== selectedSymbol) {
+      setSelectedSymbol(trade.symbol);
+    }
+    navigate({ to: "/", search: { symbol: trade.symbol }, replace: true });
+  }, [trade.symbol, selectedSymbol, setSelectedSymbol, navigate]);
+
+  const handleClose = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
     setClosing(true);
     const result = await closePosition(trade.id, tradePrice);
     setClosing(false);
@@ -214,7 +242,10 @@ function PositionCard({ trade }: { trade: Trade }) {
   }, [trade.id, tradePrice, closePosition]);
 
   return (
-    <div className="border-b border-border/50 px-3 py-3 space-y-2">
+    <div
+      onClick={handleNavigate}
+      className={`border-b border-border/50 px-3 py-3 space-y-2 cursor-pointer active:bg-accent/20 transition-colors ${isCurrentSymbol ? "bg-accent/10" : ""}`}
+    >
       {/* 헤더: 종목 + 종료 버튼 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

@@ -235,7 +235,7 @@ function ViewChart({ timeframe, symbol }: { timeframe: string; symbol: string })
     };
   }, [timeframe, symbol]);
 
-  // ── 포지션 가격선 (점선) ──
+  // ── 포지션 가격선 (점선) — 현재 차트 심볼과 일치하는 포지션만 표시 ──
   useEffect(() => {
     const series = seriesRef.current;
     if (!series) return;
@@ -253,7 +253,9 @@ function ViewChart({ timeframe, symbol }: { timeframe: string; symbol: string })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const newLines: any[] = [];
 
-    for (const trade of positions) {
+    const filteredPositions = positions.filter((t) => t.symbol === symbol);
+
+    for (const trade of filteredPositions) {
       const isLong = trade.position_type === "LONG";
 
       // 청산가 계산 (entry_price 기반, currentPrice 불필요)
@@ -317,7 +319,7 @@ function ViewChart({ timeframe, symbol }: { timeframe: string; symbol: string })
     }
 
     priceLinesRef.current = newLines;
-  }, [positions, timeframe]);
+  }, [positions, timeframe, symbol]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

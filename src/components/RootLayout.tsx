@@ -6,7 +6,9 @@ import {
   startPriceStream,
   stopPriceStream,
   useTradingStore,
+  SYMBOLS,
 } from "@/store/tradingStore";
+import type { SymbolId } from "@/store/tradingStore";
 import Header from "@/components/Header";
 import NicknameSetupModal from "@/components/NicknameSetupModal";
 import TermsAgreementModal from "@/components/TermsAgreementModal";
@@ -29,6 +31,11 @@ export default function RootLayout() {
   }, [initialize]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlSym = params.get("symbol");
+    if (urlSym && urlSym in SYMBOLS) {
+      useTradingStore.setState({ selectedSymbol: urlSym as SymbolId, currentPrice: 0 });
+    }
     startPriceStream();
     return () => stopPriceStream();
   }, []);

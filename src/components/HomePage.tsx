@@ -164,14 +164,17 @@ function MobileChartOrderBook() {
 
 export default function HomePage() {
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
   const fetchPortfolio = useTradingStore((s) => s.fetchPortfolio);
   const fetchOpenPositions = useTradingStore((s) => s.fetchOpenPositions);
   const fetchClosedTrades = useTradingStore((s) => s.fetchClosedTrades);
   const fetchPendingOrders = useTradingStore((s) => s.fetchPendingOrders);
   const setSelectedSymbol = useTradingStore((s) => s.setSelectedSymbol);
   const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const positions = useTradingStore((s) => s.positions);
 
   const { symbol: urlSymbol } = useSearch({ from: indexRoute.id });
+  const autoRedirectedRef = useRef(false);
 
   // URL searchParams → store 동기화 (마운트 및 URL 변경 시)
   useEffect(() => {
@@ -179,6 +182,17 @@ export default function HomePage() {
       setSelectedSymbol(urlSymbol);
     }
   }, [urlSymbol]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // URL에 symbol이 없으면 보유 포지션의 심볼로 자동 이동
+  useEffect(() => {
+    if (urlSymbol || autoRedirectedRef.current) return;
+    if (positions.length > 0) {
+      autoRedirectedRef.current = true;
+      const firstSymbol = positions[0].symbol;
+      setSelectedSymbol(firstSymbol);
+      navigate({ to: "/", search: { symbol: firstSymbol }, replace: true });
+    }
+  }, [positions, urlSymbol, setSelectedSymbol, navigate]);
 
   // 유저 데이터 로드
   useEffect(() => {
