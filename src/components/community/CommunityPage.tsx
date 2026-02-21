@@ -368,6 +368,7 @@ export default function CommunityPage() {
     } else {
       useCommunityStore.setState({ likedPostIds: new Set() });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, fetchLikedPostIds]);
 
   // 무한스크롤: 하단 감지 시 다음 페이지 로드

@@ -135,10 +135,15 @@ function PostContent({ content }: { content: string }) {
     }
 
     // 수익 카드
+    let parsed: ProfitData | null = null;
     try {
-      const data = JSON.parse(match[1]) as ProfitData;
-      parts.push(<ProfitCard key={`card-${match.index}`} data={data} />);
+      parsed = JSON.parse(match[1]) as ProfitData;
     } catch {
+      // invalid JSON, fall through to raw text
+    }
+    if (parsed !== null) {
+      parts.push(<ProfitCard key={`card-${match.index}`} data={parsed} />);
+    } else {
       parts.push(
         <span key={`err-${match.index}`} className="whitespace-pre-wrap">
           {match[0]}
@@ -259,8 +264,7 @@ function CommentContent({ content }: { content: string }) {
   return (
     <p className="text-sm text-foreground mt-1 whitespace-pre-wrap break-words">
       {parts.map((part, i) => {
-        if (MENTION_REGEX.test(part)) {
-          MENTION_REGEX.lastIndex = 0;
+        if (/^@\S+$/.test(part)) {
           return (
             <span key={i} className="text-indigo-400 font-medium">
               {part}
@@ -493,20 +497,25 @@ function CommentForm({
   prefill?: string;
 }) {
   const [text, setText] = useState(prefill ?? "");
+  const [prevPrefill, setPrevPrefill] = useState(prefill);
   const [sending, setSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // prefill 변경 시 텍스트 세팅 + 자동 포커스 + 커서 위치 이동
+  // prefill 변경 시 텍스트 세팅 (React "Adjusting state when a prop changes" 패턴)
+  if (prevPrefill !== prefill && prefill !== undefined) {
+    setPrevPrefill(prefill);
+    setText(prefill);
+  }
+
+  // DOM 조작(포커스·커서)만 effect에서 처리 — setState 호출 없음
   useEffect(() => {
-    if (prefill !== undefined) {
-      setText(prefill);
-      requestAnimationFrame(() => {
-        const el = textareaRef.current;
-        if (!el) return;
-        el.focus();
-        el.setSelectionRange(prefill.length, prefill.length);
-      });
-    }
+    if (prefill === undefined) return;
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(prefill.length, prefill.length);
+    });
   }, [prefill]);
 
   const handleSubmit = async () => {
@@ -596,6 +605,7 @@ export default function CommunityPostPage() {
     if (user) {
       fetchLikedPostIds(user.id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, fetchLikedPostIds]);
 
   // 좋아요 핸들러

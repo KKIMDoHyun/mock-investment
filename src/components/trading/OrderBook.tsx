@@ -84,12 +84,6 @@ export default function OrderBook() {
   const [asks, setAsks] = useState<OrderLevel[]>([]);
   const [bids, setBids] = useState<OrderLevel[]>([]);
 
-  // 심볼 전환 시 이전 데이터 즉시 비우기
-  useEffect(() => {
-    setAsks([]);
-    setBids([]);
-  }, [depthWsUrl]);
-
   // WebSocket 연결
   useEffect(() => {
     let active = true;

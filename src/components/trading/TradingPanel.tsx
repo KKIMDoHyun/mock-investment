@@ -38,7 +38,7 @@ function BalanceSection({ user }: { user: User | null }) {
   const positions = useTradingStore((s) => s.positions);
   const lastAttendanceDate = useTradingStore((s) => s.lastAttendanceDate);
   const claimAttendance = useTradingStore((s) => s.claimAttendance);
-  const useRefillTicket = useTradingStore((s) => s.useRefillTicket);
+  const refillTicketAction = useTradingStore((s) => s.useRefillTicket);
 
   // equity를 selector로 계산 → 수치가 같으면 Zustand가 re-render를 건너뜀
   const equity = useTradingStore((s) => {
@@ -63,11 +63,11 @@ function BalanceSection({ user }: { user: User | null }) {
   const handleRefill = useCallback(async () => {
     if (!user) return;
     setRefilling(true);
-    const result = await useRefillTicket(user.id);
+    const result = await refillTicketAction(user.id);
     if (result.success) toast.success(result.message);
     else toast.error(result.message);
     setRefilling(false);
-  }, [user, useRefillTicket]);
+  }, [user, refillTicketAction]);
 
   // 비로그인 상태: 잔고 없이 안내만 표시
   if (!user) {
@@ -206,8 +206,6 @@ export default function TradingPanel() {
   const navigate = useNavigate();
 
   const currentPrice = useTradingStore((s) => s.currentPrice);
-  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
-  const symbolInfo = SYMBOLS[selectedSymbol];
   const balance = useTradingStore((s) => s.balance);
   const openPosition = useTradingStore((s) => s.openPosition);
   const submitLimitOrder = useTradingStore((s) => s.submitLimitOrder);

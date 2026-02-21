@@ -11,11 +11,11 @@ export const indexRoute = createRoute({
   component: HomePage,
   validateSearch: (
     search: Record<string, unknown>
-  ): { symbol: SymbolId } => {
+  ): { symbol?: SymbolId } => {
     const raw = search.symbol as string | undefined;
     if (raw && VALID_SYMBOLS.includes(raw as SymbolId)) {
       return { symbol: raw as SymbolId };
     }
-    return { symbol: "BTCUSDT" };
+    return {};
   },
 });

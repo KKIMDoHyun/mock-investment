@@ -148,6 +148,8 @@ function SymbolBar() {
 // ── 모바일 차트/호가 탭 전환 (lg 이상에서는 숨김) ──
 function MobileChartOrderBook() {
   const [mobileTab, setMobileTab] = useState<"chart" | "orderbook">("chart");
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const depthWsUrl = SYMBOLS[selectedSymbol].depthStream;
 
   return (
     <div className="lg:hidden flex flex-col">
@@ -184,7 +186,7 @@ function MobileChartOrderBook() {
         </div>
       ) : (
         <div className="border border-border border-t-0 rounded-b-xl overflow-y-auto">
-          <OrderBook />
+          <OrderBook key={depthWsUrl} />
         </div>
       )}
     </div>
@@ -193,22 +195,23 @@ function MobileChartOrderBook() {
 
 export default function HomePage() {
   const user = useAuthStore((s) => s.user);
-  const navigate = useNavigate();
   const fetchPortfolio = useTradingStore((s) => s.fetchPortfolio);
   const fetchOpenPositions = useTradingStore((s) => s.fetchOpenPositions);
   const fetchClosedTrades = useTradingStore((s) => s.fetchClosedTrades);
   const fetchPendingOrders = useTradingStore((s) => s.fetchPendingOrders);
   const setSelectedSymbol = useTradingStore((s) => s.setSelectedSymbol);
   const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const depthWsUrl = SYMBOLS[selectedSymbol].depthStream;
 
   const { symbol: urlSymbol } = useSearch({ from: indexRoute.id });
 
   // URL searchParams → store 동기화
   // urlSymbol이 바뀌면(뒤로가기, 직접 URL 입력 등) store도 갱신
-  // validateSearch에서 기본값 "BTCUSDT"를 보장하므로 urlSymbol은 항상 정의됩니다.
+  // symbol이 없으면 기본값 "BTCUSDT" 사용
   useEffect(() => {
-    if (urlSymbol !== selectedSymbol) {
-      setSelectedSymbol(urlSymbol);
+    const sym = urlSymbol ?? "BTCUSDT";
+    if (sym !== selectedSymbol) {
+      setSelectedSymbol(sym);
     }
     // selectedSymbol은 의도적으로 제외: store가 변할 때 다시 URL로 쓰는 순환을 방지
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,7 +276,7 @@ export default function HomePage() {
           {/* 호가창 + 주문창 */}
           <div className="flex gap-4">
             <div className="w-[200px] rounded-xl shrink-0 min-h-[420px]">
-              <OrderBook />
+              <OrderBook key={depthWsUrl} />
             </div>
             <div className="w-[360px] rounded-xl shrink-0 min-h-[460px]">
               <TradingPanel />

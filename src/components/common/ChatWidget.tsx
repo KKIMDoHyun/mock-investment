@@ -451,7 +451,6 @@ export default function ChatWidget() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showPositionPicker, setShowPositionPicker] = useState(false);
   const [userRanks, setUserRanks] = useState<Map<string, number>>(new Map());
@@ -472,10 +471,12 @@ export default function ChatWidget() {
     });
   }, []);
 
-  // ── 초기 메시지 로드 (최근 50개) ──
-  const loadMessages = useCallback(async () => {
-    setLoadingMessages(true);
+  // 채팅창이 열려 있고 아직 로드되지 않은 경우 스피너 표시 (파생값)
+  const loadingMessages = isOpen && !loaded;
 
+  // ── 초기 메시지 로드 — 순수 데이터 페처 (setState 호출 없음) ──
+  // setState는 호출처의 .then() 안에서 처리하여 effect 내 동기 setState 규칙 준수
+  const loadMessages = useCallback(async (): Promise<ChatMessage[]> => {
     const { data, error } = await supabase
       .from("messages")
       .select("id, user_id, content, created_at")
@@ -484,13 +485,12 @@ export default function ChatWidget() {
 
     if (error) {
       console.error("메시지 로드 에러:", error.message);
-      setLoadingMessages(false);
-      return;
+      return [];
     }
 
     const rows = (data ?? []).reverse();
 
-    const enriched = await Promise.all(
+    return await Promise.all(
       rows.map(async (row) => {
         const userId = row.user_id as string;
         const rawContent = row.content as string;
@@ -510,10 +510,6 @@ export default function ChatWidget() {
         };
       })
     );
-
-    setMessages(enriched);
-    setLoaded(true);
-    setLoadingMessages(false);
   }, []);
 
   // ── 채팅창 열릴 때 로드 ──
@@ -521,7 +517,11 @@ export default function ChatWidget() {
     if (!isOpen) return;
 
     if (!loaded) {
-      loadMessages().then(() => scrollToBottom(true));
+      loadMessages().then((enriched) => {
+        setMessages(enriched);
+        setLoaded(true);
+        scrollToBottom(true);
+      });
     } else {
       scrollToBottom(true);
     }
@@ -784,7 +784,11 @@ export default function ChatWidget() {
               onAgreed={() => {
                 // 동의 후 메시지 로드
                 if (!loaded) {
-                  loadMessages().then(() => scrollToBottom(true));
+                  loadMessages().then((enriched) => {
+                    setMessages(enriched);
+                    setLoaded(true);
+                    scrollToBottom(true);
+                  });
                 }
               }}
             />

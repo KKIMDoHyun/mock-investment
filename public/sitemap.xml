@@ -4,50 +4,80 @@
   <!-- 정적 페이지 (6개) -->
   <url>
     <loc>https://modumotu.com/</loc>
-    <lastmod>2026-02-20</lastmod>
+    <lastmod>2026-02-21</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://modumotu.com/ranking</loc>
-    <lastmod>2026-02-20</lastmod>
+    <lastmod>2026-02-21</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://modumotu.com/community</loc>
-    <lastmod>2026-02-20</lastmod>
+    <lastmod>2026-02-21</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://modumotu.com/contact</loc>
-    <lastmod>2026-02-20</lastmod>
+    <lastmod>2026-02-21</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://modumotu.com/privacy</loc>
-    <lastmod>2026-02-20</lastmod>
+    <lastmod>2026-02-21</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
     <loc>https://modumotu.com/terms</loc>
-    <lastmod>2026-02-20</lastmod>
+    <lastmod>2026-02-21</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
 
-  <!-- 커뮤니티 게시글 (25개) -->
+  <!-- 커뮤니티 게시글 (30개) -->
   <url>
-    <loc>https://modumotu.com/community/1e00b42d-7ae8-4f44-b26d-947cf0de4195</loc>
+    <loc>https://modumotu.com/community/5997b411-c1ec-4239-b289-1470daca068a</loc>
+    <lastmod>2026-02-21</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://modumotu.com/community/67c77418-0b84-4a86-bf09-e3b37570bc2a</loc>
+    <lastmod>2026-02-21</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://modumotu.com/community/523b3612-d1c1-425d-b364-320068d6cf36</loc>
+    <lastmod>2026-02-21</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://modumotu.com/community/2c942e28-d62b-421d-9a2e-7855cecb237e</loc>
+    <lastmod>2026-02-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://modumotu.com/community/5cd1b3b3-ef1a-4b5b-92a7-384b53889fce</loc>
     <lastmod>2026-02-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://modumotu.com/community/f1721010-7701-4e93-92b3-9458940283d4</loc>
+    <lastmod>2026-02-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://modumotu.com/community/1e00b42d-7ae8-4f44-b26d-947cf0de4195</loc>
     <lastmod>2026-02-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

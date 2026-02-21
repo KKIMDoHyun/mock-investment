@@ -6,14 +6,23 @@ interface SplashScreenProps {
 
 export default function SplashScreen({ isLoading }: SplashScreenProps) {
   const [phase, setPhase] = useState<"visible" | "fading" | "gone">("visible");
+  const [prevIsLoading, setPrevIsLoading] = useState(isLoading);
 
+  // isLoading이 false로 바뀌는 순간 렌더 도중 fading으로 전환
+  // (React 공식 "Adjusting state when a prop changes" 패턴)
+  if (prevIsLoading !== isLoading) {
+    setPrevIsLoading(isLoading);
+    if (!isLoading && phase === "visible") {
+      setPhase("fading");
+    }
+  }
+
+  // fading 상태가 되면 500ms 후 gone으로 전환 (setTimeout 콜백 내부라 규칙 미적용)
   useEffect(() => {
-    if (isLoading) return;
-
-    setPhase("fading");
-    const removeTimer = setTimeout(() => setPhase("gone"), 500);
-    return () => clearTimeout(removeTimer);
-  }, [isLoading]);
+    if (phase !== "fading") return;
+    const timer = setTimeout(() => setPhase("gone"), 500);
+    return () => clearTimeout(timer);
+  }, [phase]);
 
   if (phase === "gone") return null;
 
