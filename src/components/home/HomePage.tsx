@@ -155,7 +155,7 @@ function MobileChartOrderBook() {
           <TradingChart />
         </div>
       ) : (
-        <div className="border border-border border-t-0 rounded-b-xl overflow-hidden h-[250px] sm:h-[350px]">
+        <div className="border border-border border-t-0 rounded-b-xl overflow-y-auto">
           <OrderBook />
         </div>
       )}
@@ -220,30 +220,35 @@ export default function HomePage() {
       <SymbolBar />
 
       {/* ── 차트 + 호가창 + 주문 패널 ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_180px_320px] gap-2 sm:gap-4">
+      {/*
+        items-start: 각 열이 자신의 자연 높이만큼만 차지합니다.
+        차트만 명시적 height를 갖고, 호가창/주문창은 컨텐츠 높이에 따라 자동 결정됩니다.
+        고해상도에서도 호가창·주문창이 차트 높이까지 강제로 늘어나지 않습니다.
+      */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_180px_320px] gap-2 sm:gap-4 lg:items-start">
         {/* 모바일: 차트/호가 탭 전환 */}
         <MobileChartOrderBook />
 
-        {/* 데스크탑: 차트 */}
+        {/* 데스크탑: 차트 — TradingView는 명시적 height 필요. 최소 480, 최대 680px로 제한 */}
         <div
           className="hidden lg:flex lg:flex-col bg-card border border-border rounded-xl overflow-hidden"
-          style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}
+          style={{ height: "clamp(480px, calc(100dvh - 220px), 680px)" }}
         >
           <TradingChart />
         </div>
 
-        {/* 데스크탑: 호가창 */}
+        {/* 데스크탑: 호가창 — 자연 높이, 차트 max-height와 동일하게 제한 */}
         <div
-          className="hidden lg:block overflow-hidden rounded-xl"
-          style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}
+          className="hidden lg:block overflow-y-auto rounded-xl"
+          style={{ maxHeight: "clamp(480px, calc(100dvh - 220px), 680px)" }}
         >
           <OrderBook />
         </div>
 
-        {/* 주문 패널 */}
+        {/* 주문 패널 — 자연 높이, 넘칠 경우 스크롤 */}
         <div
-          className="lg:rounded-xl lg:overflow-hidden"
-          style={{ height: "calc(100dvh - 220px)", minHeight: 480 }}
+          className="lg:rounded-xl lg:overflow-y-auto"
+          style={{ maxHeight: "clamp(480px, calc(100dvh - 220px), 680px)" }}
         >
           <TradingPanel />
         </div>
