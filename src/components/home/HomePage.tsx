@@ -239,13 +239,13 @@ export default function HomePage() {
     <div className="flex-1 flex">
       {/* 좌측 광고 사이드바 */}
       <aside
-        className="hidden xl:flex w-44 shrink-0 sticky self-start flex-col items-center justify-center"
+        className="hidden xl:flex w-44 shrink-0 sticky self-start flex-col items-center justify-center pl-6 pr-3"
         style={{ top: "56px", height: "calc(100dvh - 56px)" }}
       >
         <AdSlot variant="sidebar-left" />
       </aside>
 
-    <main className="flex-1 min-w-0 px-2 sm:px-4 lg:px-8 pt-6 sm:pt-10 pb-2 sm:pb-4 flex flex-col gap-2 sm:gap-4">
+    <main className="flex-1 min-w-0 pl-1 pr-2 sm:pl-2 sm:pr-4 lg:pl-4 lg:pr-8 pt-6 sm:pt-10 pb-2 sm:pb-4 flex flex-col gap-2 sm:gap-4">
       {/* ── 상단 종목 정보 바 ── */}
       <SymbolBar />
 
@@ -278,7 +278,7 @@ export default function HomePage() {
             <div className="w-[200px] rounded-xl shrink-0 min-h-[420px]">
               <OrderBook key={depthWsUrl} />
             </div>
-            <div className="w-[360px] rounded-xl shrink-0 min-h-[460px]">
+            <div className="w-[320px] rounded-xl shrink-0 min-h-[460px]">
               <TradingPanel />
             </div>
           </div>
