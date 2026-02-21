@@ -95,6 +95,14 @@ function ViewChart({ timeframe, symbol }: { timeframe: string; symbol: string })
         timeVisible: true,
         secondsVisible: timeframe === "1s" || timeframe === "1m",
       },
+      localization: {
+        // Y축 레이블 및 현재가 선 숫자에 쉼표 천 단위 구분 적용
+        priceFormatter: (price: number) =>
+          price.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }),
+      },
     });
     chartRef.current = chart;
 

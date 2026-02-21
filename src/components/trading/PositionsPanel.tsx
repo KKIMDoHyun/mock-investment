@@ -606,9 +606,9 @@ function HistoryTable() {
   }
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       {/* 데스크탑 테이블 */}
-      <div className="hidden md:block overflow-x-auto max-h-[245px] overflow-y-auto">
+      <div className="hidden md:flex md:flex-col h-full overflow-x-auto overflow-y-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-card">
             <tr className="text-xs text-muted-foreground border-b border-border">
@@ -670,7 +670,7 @@ function HistoryTable() {
       </div>
 
       {/* 모바일 카드 */}
-      <div className="md:hidden max-h-[420px] overflow-y-auto">
+      <div className="md:hidden h-full overflow-y-auto">
         {closedTrades.map((trade) => {
           const closePrice = trade.close_price ?? 0;
           const { pnl } = calcPnl(trade, closePrice);
@@ -803,8 +803,8 @@ export default function PositionsPanel() {
         </button>
       </div>
 
-      {/* 탭 컨텐츠 */}
-      <div className="min-h-[120px] sm:min-h-[160px]">
+      {/* 탭 컨텐츠 — 고정 높이로 탭 전환 시 패널 크기 변동 방지 */}
+      <div className="h-[260px] sm:h-[300px] overflow-hidden">
         {activeTab === "positions" && <PositionsTable />}
         {activeTab === "orders" && <PendingOrdersTable />}
         {activeTab === "history" && <HistoryTable />}

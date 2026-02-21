@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { TrendingUp, TrendingDown, Gift, Check, Ticket } from "lucide-react";
 import { toast } from "sonner";
@@ -135,6 +135,71 @@ function addCommas(s: string): string {
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return parts.join(".");
 }
+
+/**
+ * 현재가 · 전일 대비 변동액 · 변동률 표시 컴포넌트.
+ * memo로 격리되어 있으므로 부모(TradingPanel)가 다른 이유(잔고·포지션)로
+ * 리렌더링될 때 이 컴포넌트는 자체 store 구독이 변경될 때만 업데이트됩니다.
+ */
+const PriceTicker = memo(function PriceTicker() {
+  const currentPrice = useTradingStore((s) => s.currentPrice);
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const openPrice = useTradingStore((s) => s.openPrices[s.selectedSymbol]);
+  const symbolInfo = SYMBOLS[selectedSymbol];
+
+  const hasRef = openPrice > 0 && currentPrice > 0;
+  const change = hasRef ? currentPrice - openPrice : 0;
+  const changeRate = hasRef ? (change / openPrice) * 100 : 0;
+  const isUp = change >= 0;
+
+  // 기준가 없을 때는 중립색, 있으면 등락 색상
+  const colorClass = !hasRef
+    ? "text-foreground"
+    : isUp
+      ? "text-red-500"
+      : "text-blue-500";
+
+  const changeText = hasRef
+    ? `${isUp ? "▲" : "▼"} ${isUp ? "+" : ""}${change.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} (${isUp ? "+" : ""}${changeRate.toFixed(2)}%)`
+    : null;
+
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-1.5">
+        <div
+          className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
+            selectedSymbol === "BTCUSDT"
+              ? "bg-orange-500/20 text-orange-400"
+              : "bg-indigo-500/20 text-indigo-400"
+          }`}
+        >
+          {symbolInfo.icon}
+        </div>
+        <span className="text-xs font-medium text-foreground">
+          {symbolInfo.label}
+        </span>
+      </div>
+      <div className="flex flex-col items-end gap-0.5">
+        <p className={`text-xs font-semibold tabular-nums ${colorClass}`}>
+          {currentPrice > 0
+            ? `$${currentPrice.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}`
+            : "—"}
+        </p>
+        {changeText && (
+          <p className={`text-[10px] tabular-nums leading-none ${colorClass}`}>
+            {changeText}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+});
 
 export default function TradingPanel() {
   const user = useAuthStore((s) => s.user);
@@ -355,22 +420,8 @@ export default function TradingPanel() {
 
       <div className="h-px bg-border" />
 
-      {/* ── 현재가 ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
-            selectedSymbol === "BTCUSDT" ? "bg-orange-500/20 text-orange-400" : "bg-indigo-500/20 text-indigo-400"
-          }`}>
-            {symbolInfo.icon}
-          </div>
-          <span className="text-xs font-medium text-foreground">{symbolInfo.label}</span>
-        </div>
-        <p className="text-xs font-semibold text-foreground tabular-nums">
-          {currentPrice > 0
-            ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            : "—"}
-        </p>
-      </div>
+      {/* ── 현재가 + 전일 대비 변동 ── */}
+      <PriceTicker />
 
       {/* ── 주문 유형 탭 (시장가 / 지정가) ── */}
       <Tabs value={orderType} onValueChange={(v) => setOrderType(v as OrderType)}>

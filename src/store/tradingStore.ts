@@ -119,6 +119,10 @@ interface TradingState {
   currentPrice: number;
   /** 심볼별 최근 가격 캐시 */
   prices: Record<SymbolId, number>;
+  /** 심볼별 24시간 기준 시가 (전일 대비 계산용) */
+  openPrices: Record<SymbolId, number>;
+  /** 24hr 티커 데이터 fetch (전일 대비 변동률 계산) */
+  fetchOpenPrices: () => Promise<void>;
   /** 유저 잔고 (USDT) */
   balance: number;
   /** 리필권 보유 수 */
@@ -704,16 +708,81 @@ async function fetchAllSymbolPrices() {
   }
 }
 
+/**
+ * 모든 심볼의 UTC 00:00 일봉 시가를 klines REST API로 가져와 openPrices에 캐시.
+ *
+ * ticker/24hr 의 openPrice 는 "현재 시각 기준 정확히 24시간 전" 가격(롤링 window)이라
+ * TradingView 등 대부분의 거래소 UI가 사용하는 "오늘 UTC 자정 시가"와 다릅니다.
+ * klines?interval=1d&limit=1 은 현재 진행 중인 일봉 캔들을 반환하고,
+ * 그 open(index 1)이 오늘 UTC 00:00 시가이므로 TradingView 변동률과 일치합니다.
+ */
+async function fetchAllOpenPrices() {
+  try {
+    const results = await Promise.all(
+      Object.values(SYMBOLS).map(async (sym) => {
+        // restBase: "https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT" 형태
+        const url = `${sym.restBase}&interval=1d&limit=1`;
+        const res = await fetch(url);
+        const data = (await res.json()) as (string | number)[][];
+        // klines 응답 구조: [[openTime, open, high, low, close, ...]]
+        const open = parseFloat(String(data[0]?.[1] ?? ""));
+        return { id: sym.id as SymbolId, open };
+      })
+    );
+
+    const update: Partial<Record<SymbolId, number>> = {};
+    for (const { id, open } of results) {
+      if (Number.isFinite(open) && open > 0) update[id] = open;
+    }
+    useTradingStore.setState((s) => ({ openPrices: { ...s.openPrices, ...update } }));
+  } catch {
+    // 실패 시 무시
+  }
+}
+
+// UTC 자정 갱신 타이머 (날짜가 바뀌면 새 일봉의 시가로 자동 교체)
+let midnightTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleMidnightRefresh() {
+  if (midnightTimer) return; // 중복 등록 방지
+  const now = Date.now();
+  const nextMidnightUtc =
+    new Date(
+      Date.UTC(
+        new Date().getUTCFullYear(),
+        new Date().getUTCMonth(),
+        new Date().getUTCDate() + 1 // 다음 날 00:00 UTC
+      )
+    ).getTime();
+  const msUntilMidnight = nextMidnightUtc - now;
+
+  midnightTimer = setTimeout(() => {
+    midnightTimer = null;
+    fetchAllOpenPrices();       // 새 일봉 시가 즉시 갱신
+    scheduleMidnightRefresh();  // 다음 자정 예약
+  }, msUntilMidnight);
+}
+
+function cancelMidnightRefresh() {
+  if (midnightTimer) {
+    clearTimeout(midnightTimer);
+    midnightTimer = null;
+  }
+}
+
 /** 가격 스트림 시작 (RootLayout 마운트 시 호출) */
 export function startPriceStream() {
   streamActive = true;
   connectPriceWs();
   fetchAllSymbolPrices();
+  fetchAllOpenPrices();
+  scheduleMidnightRefresh(); // UTC 자정마다 일봉 시가 자동 갱신
 }
 
 /** 가격 스트림 중지 (RootLayout 언마운트 시 호출) */
 export function stopPriceStream() {
   streamActive = false;
+  cancelMidnightRefresh();
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -821,9 +890,15 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     if (prevPrice <= 0) {
       fetchAllSymbolPrices();
     }
+    // 심볼 변경 시 기준가도 최신화
+    if (!get().openPrices[symbol]) {
+      fetchAllOpenPrices();
+    }
   },
   currentPrice: 0,
   prices: { BTCUSDT: 0, ETHUSDT: 0 },
+  openPrices: { BTCUSDT: 0, ETHUSDT: 0 },
+  fetchOpenPrices: fetchAllOpenPrices,
   balance: 0,
   refillTickets: 0,
   positions: [],

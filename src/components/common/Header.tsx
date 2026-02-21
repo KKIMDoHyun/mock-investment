@@ -37,8 +37,8 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
       <div className="w-full px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-12 sm:h-14">
-          {/* Logo + Online count */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          {/* 로고 + 네비게이션 */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               to="/"
               className="flex items-center gap-2 sm:gap-2.5 no-underline"
@@ -53,29 +53,14 @@ export default function Header() {
               </span>
             </Link>
 
-            {/* Online count */}
-            {onlineCount > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
-                <span className="tabular-nums">
-                  <span className="hidden sm:inline">접속 </span>
-                  {onlineCount}
-                  <span className="hidden sm:inline">명</span>
-                </span>
-              </div>
-            )}
-
             {/* 랭킹 / 커뮤니티 바로가기 */}
-            <nav className="flex items-center gap-0.5">
+            <nav className="flex items-center gap-1">
               <Link
                 to="/ranking"
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-secondary transition-colors no-underline"
               >
-                <Trophy className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">랭킹</span>
+                <Trophy className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span>랭킹</span>
               </Link>
               <Link
                 to="/community"
@@ -83,16 +68,29 @@ export default function Header() {
                   sessionStorage.removeItem("community_restore");
                   sessionStorage.removeItem("community_scrollY");
                 }}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors no-underline"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-secondary transition-colors no-underline"
               >
-                <MessageSquare className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">커뮤니티</span>
+                <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span>커뮤니티</span>
               </Link>
             </nav>
           </div>
 
-          {/* Auth area */}
-          <div className="flex items-center gap-1 sm:gap-1.5">
+          {/* Auth area + 접속 인원 */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
+            {/* 접속 인원 (우측 끝) */}
+            {onlineCount > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                <span className="tabular-nums">
+                  접속 {onlineCount}명
+                </span>
+              </div>
+            )}
+
             {user ? (
               /* 로그인 상태: 유저 드롭다운 */
               <DropdownMenu>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 import { useSearch, useNavigate } from "@tanstack/react-router";
 import { BarChart3, BookOpen, ChevronDown } from "lucide-react";
 import { Seo } from "@/hooks/useSeo";
@@ -11,21 +11,48 @@ import type { SymbolId } from "@/store/tradingStore";
 import { useAuthStore } from "@/store/authStore";
 import { indexRoute } from "@/routes/index";
 
-// ── 현재가 표시 (독립 컴포넌트로 분리 → 가격 변동 시 이것만 리렌더) ──
-function PriceDisplay() {
+// ── 현재가 + 전일 대비 변동 표시 (독립 컴포넌트 → 가격 변동 시 이것만 리렌더) ──
+const PriceDisplay = memo(function PriceDisplay() {
   const currentPrice = useTradingStore((s) => s.currentPrice);
+  const openPrice = useTradingStore((s) => s.openPrices[s.selectedSymbol]);
+
+  const hasRef = openPrice > 0 && currentPrice > 0;
+  const change = hasRef ? currentPrice - openPrice : 0;
+  const changeRate = hasRef ? (change / openPrice) * 100 : 0;
+  const isUp = change >= 0;
+
+  const colorClass = !hasRef
+    ? "text-foreground"
+    : isUp
+      ? "text-red-500"
+      : "text-blue-500";
 
   return (
-    <p className="text-base sm:text-lg font-bold text-foreground tabular-nums leading-tight">
-      {currentPrice > 0
-        ? `$${currentPrice.toLocaleString(undefined, {
+    <div className="flex flex-col gap-0.5">
+      <p className={`text-base sm:text-lg font-bold tabular-nums leading-tight ${colorClass}`}>
+        {currentPrice > 0
+          ? `$${currentPrice.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`
+          : "불러오는 중..."}
+      </p>
+      {hasRef && (
+        <p className={`text-[10px] sm:text-xs tabular-nums leading-none ${colorClass}`}>
+          {isUp ? "▲" : "▼"}
+          {" "}
+          {isUp ? "+" : ""}
+          {change.toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
-          })}`
-        : "불러오는 중..."}
-    </p>
+          })}
+          {" "}
+          ({isUp ? "+" : ""}{changeRate.toFixed(2)}%)
+        </p>
+      )}
+    </div>
   );
-}
+});
 
 const SYMBOL_LIST = Object.values(SYMBOLS);
 const ICON_COLORS: Record<SymbolId, string> = {
@@ -172,29 +199,19 @@ export default function HomePage() {
   const fetchPendingOrders = useTradingStore((s) => s.fetchPendingOrders);
   const setSelectedSymbol = useTradingStore((s) => s.setSelectedSymbol);
   const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
-  const positions = useTradingStore((s) => s.positions);
 
   const { symbol: urlSymbol } = useSearch({ from: indexRoute.id });
-  const autoRedirectedRef = useRef(false);
 
   // URL searchParams → store 동기화
   // urlSymbol이 바뀌면(뒤로가기, 직접 URL 입력 등) store도 갱신
+  // validateSearch에서 기본값 "BTCUSDT"를 보장하므로 urlSymbol은 항상 정의됩니다.
   useEffect(() => {
-    if (urlSymbol && urlSymbol !== selectedSymbol) {
+    if (urlSymbol !== selectedSymbol) {
       setSelectedSymbol(urlSymbol);
     }
     // selectedSymbol은 의도적으로 제외: store가 변할 때 다시 URL로 쓰는 순환을 방지
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlSymbol, setSelectedSymbol]);
-
-  // URL에 symbol이 없으면 보유 포지션의 심볼로 자동 이동 (1회)
-  useEffect(() => {
-    if (urlSymbol || autoRedirectedRef.current || positions.length === 0) return;
-    autoRedirectedRef.current = true;
-    const firstSymbol = positions[0].symbol;
-    setSelectedSymbol(firstSymbol);
-    navigate({ to: "/", search: { symbol: firstSymbol }, replace: true });
-  }, [positions, urlSymbol, setSelectedSymbol, navigate]);
 
   // 유저 데이터 로드
   useEffect(() => {
