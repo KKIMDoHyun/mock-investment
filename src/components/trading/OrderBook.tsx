@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, memo } from "react";
 import { useTradingStore, SYMBOLS } from "@/store/tradingStore";
+import OrderBookSkeleton from "./OrderBookSkeleton";
 
 interface OrderLevel {
   price: number;
@@ -81,6 +82,7 @@ export default function OrderBook() {
   const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
   const depthWsUrl = SYMBOLS[selectedSymbol].depthStream;
 
+  const [loading, setLoading] = useState(true);
   const [asks, setAsks] = useState<OrderLevel[]>([]);
   const [bids, setBids] = useState<OrderLevel[]>([]);
 
@@ -116,6 +118,7 @@ export default function OrderBook() {
 
           setAsks(newAsks);
           setBids(newBids);
+          setLoading(false);
         } catch {
           // ignore parse errors
         }
@@ -155,6 +158,8 @@ export default function OrderBook() {
   );
 
   const symbol = selectedSymbol;
+
+  if (loading) return <OrderBookSkeleton />;
 
   return (
     // 자연 높이로 렌더링, 최대 높이만 제한 → 고해상도에서도 무한히 늘어나지 않음
