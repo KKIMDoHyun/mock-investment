@@ -195,6 +195,12 @@ interface TradingState {
   /** 호가창에서 선택된 가격 (→ TradingPanel 연동) */
   orderBookPrice: number | null;
   setOrderBookPrice: (price: number | null) => void;
+
+  /**
+   * 로그아웃/회원탈퇴 시 유저별 상태 초기화.
+   * selectedSymbol, currentPrice, prices 등 공용 상태는 유지합니다.
+   */
+  reset: () => void;
 }
 
 // ────────────────────────────────────────────
@@ -830,6 +836,18 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   orderBookPrice: null,
   setOrderBookPrice: (price) => set({ orderBookPrice: price }),
+
+  // ── 유저 상태 초기화 (로그아웃 / 회원탈퇴) ──
+  reset: () =>
+    set({
+      balance: 0,
+      refillTickets: 0,
+      positions: [],
+      closedTrades: [],
+      pendingOrders: [],
+      lastAttendanceDate: null,
+      loading: false,
+    }),
 
   // ── 포트폴리오 조회 ──
   fetchPortfolio: async (userId) => {

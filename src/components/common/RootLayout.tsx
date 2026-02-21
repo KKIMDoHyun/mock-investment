@@ -64,10 +64,14 @@ export default function RootLayout() {
     return () => stopPriceStream();
   }, []);
 
-  // ── 알림 스토어 초기화 (로그인 시) ──
+  // ── 로그아웃/탈퇴 시 모든 유저 상태 초기화, 로그인 시 데이터 로드 ──
   useEffect(() => {
     if (!user) {
+      // 이전 유저의 잔고·포지션·알림 데이터를 즉시 제거
+      useTradingStore.getState().reset();
       useNotificationStore.getState().reset();
+      // 다음 로그인 시 re-fetch 허용
+      prefetchedRef.current = false;
       return;
     }
     useNotificationStore.getState().fetchNotifications(user.id);

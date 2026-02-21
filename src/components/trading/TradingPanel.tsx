@@ -69,6 +69,15 @@ function BalanceSection({ user }: { user: User | null }) {
     setRefilling(false);
   }, [user, useRefillTicket]);
 
+  // 비로그인 상태: 잔고 없이 안내만 표시
+  if (!user) {
+    return (
+      <p className="text-[11px] text-muted-foreground text-center py-1">
+        로그인 후 거래할 수 있습니다.
+      </p>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
