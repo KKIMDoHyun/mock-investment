@@ -36,7 +36,11 @@ export default function RootLayout() {
   // 다른 페이지(내정보, 알림설정 등)로 이동할 때는 플래그 여부와 무관하게 최상단으로 이동합니다.
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => {
-    if (pathname === "/community" && sessionStorage.getItem("community_restore")) return;
+    if (
+      pathname === "/community" &&
+      sessionStorage.getItem("community_restore")
+    )
+      return;
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [pathname]);
 
@@ -58,7 +62,10 @@ export default function RootLayout() {
     const params = new URLSearchParams(window.location.search);
     const urlSym = params.get("symbol");
     if (urlSym && urlSym in SYMBOLS) {
-      useTradingStore.setState({ selectedSymbol: urlSym as SymbolId, currentPrice: 0 });
+      useTradingStore.setState({
+        selectedSymbol: urlSym as SymbolId,
+        currentPrice: 0,
+      });
     }
     startPriceStream();
     return () => stopPriceStream();
@@ -78,7 +85,6 @@ export default function RootLayout() {
     useNotificationStore.getState().fetchSettings(user.id);
     // 알림 권한 요청은 usePushToken 훅에서 FCM 토큰 발급과 함께 처리합니다.
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
 
   useEffect(() => {
     if (loading || prefetchedRef.current) return;
