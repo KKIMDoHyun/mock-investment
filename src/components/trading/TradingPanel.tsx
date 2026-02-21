@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { TrendingUp, TrendingDown, Gift, Check, Ticket } from "lucide-react";
 import { toast } from "sonner";
+import type { User } from "@supabase/supabase-js";
 import { useAuthStore } from "@/store/authStore";
 import {
   useTradingStore,
@@ -21,6 +22,103 @@ const SL_PRESETS = [-1, -2, -5, -10]; // -%
 
 type OrderType = "market" | "limit";
 
+// ── KST 기준 오늘 날짜 ──
+function getTodayKST(): string {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10);
+}
+
+// ── 잔고 + 출석 + 리필권 섹션 ──
+// TradingPanel은 currentPrice 틱마다 re-render되므로, refilling 상태와 equity 계산을
+// 이 컴포넌트 안으로 colocate해 불필요한 상위 re-render 영향을 차단합니다.
+function BalanceSection({ user }: { user: User | null }) {
+  const balance = useTradingStore((s) => s.balance);
+  const refillTickets = useTradingStore((s) => s.refillTickets);
+  const positions = useTradingStore((s) => s.positions);
+  const lastAttendanceDate = useTradingStore((s) => s.lastAttendanceDate);
+  const claimAttendance = useTradingStore((s) => s.claimAttendance);
+  const useRefillTicket = useTradingStore((s) => s.useRefillTicket);
+
+  // equity를 selector로 계산 → 수치가 같으면 Zustand가 re-render를 건너뜀
+  const equity = useTradingStore((s) => {
+    const posVal = s.positions.reduce((sum, pos) => {
+      const p = s.prices[pos.symbol] || 0;
+      const { pnl } = calcPnl(pos, p);
+      return sum + pos.margin + pnl;
+    }, 0);
+    return s.balance + posVal;
+  });
+
+  const alreadyClaimed = lastAttendanceDate === getTodayKST();
+  const [refilling, setRefilling] = useState(false);
+
+  const handleAttendance = useCallback(async () => {
+    if (!user) return;
+    const result = await claimAttendance(user.id);
+    if (result.success) toast.success(result.message);
+    else toast.info(result.message);
+  }, [user, claimAttendance]);
+
+  const handleRefill = useCallback(async () => {
+    if (!user) return;
+    setRefilling(true);
+    const result = await useRefillTicket(user.id);
+    if (result.success) toast.success(result.message);
+    else toast.error(result.message);
+    setRefilling(false);
+  }, [user, useRefillTicket]);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[10px] text-muted-foreground mb-0.5">잔고 (USDT)</p>
+          <p className="text-sm font-bold text-foreground tabular-nums">
+            ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+        </div>
+        {user && (
+          <button
+            onClick={handleAttendance}
+            disabled={alreadyClaimed}
+            className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-lg transition-colors ${
+              alreadyClaimed
+                ? "bg-emerald-500/10 text-emerald-400/60 cursor-default"
+                : "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 cursor-pointer"
+            }`}
+          >
+            {alreadyClaimed ? (
+              <><Check className="h-3 w-3" />출석 완료</>
+            ) : (
+              <><Gift className="h-3 w-3" />출석체크</>
+            )}
+          </button>
+        )}
+      </div>
+      {user && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Ticket className="h-3 w-3 text-amber-400" />
+            리필권 <span className="font-bold text-foreground">{refillTickets}개</span>
+          </div>
+          <button
+            onClick={handleRefill}
+            disabled={refilling || positions.length > 0 || equity >= 500_000 || refillTickets <= 0}
+            className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              positions.length === 0 && equity < 500_000 && refillTickets > 0 && !refilling
+                ? "bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 cursor-pointer"
+                : "bg-secondary text-muted-foreground/50 cursor-not-allowed pointer-events-none"
+            }`}
+          >
+            <Ticket className="h-3 w-3" />리필하기
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 숫자 문자열에 천 단위 쉼표 추가 (예: "100000.5" → "100,000.5") */
 function addCommas(s: string): string {
   if (!s) return s;
@@ -36,33 +134,9 @@ export default function TradingPanel() {
   const currentPrice = useTradingStore((s) => s.currentPrice);
   const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
   const symbolInfo = SYMBOLS[selectedSymbol];
-  const prices = useTradingStore((s) => s.prices);
   const balance = useTradingStore((s) => s.balance);
-  const refillTickets = useTradingStore((s) => s.refillTickets);
-  const positions = useTradingStore((s) => s.positions);
-  const lastAttendanceDate = useTradingStore((s) => s.lastAttendanceDate);
-  const claimAttendance = useTradingStore((s) => s.claimAttendance);
-  const useRefillTicket = useTradingStore((s) => s.useRefillTicket);
   const openPosition = useTradingStore((s) => s.openPosition);
   const submitLimitOrder = useTradingStore((s) => s.submitLimitOrder);
-
-  const equity = useMemo(() => {
-    const positionValue = positions.reduce((sum, pos) => {
-      const p = prices[pos.symbol] || 0;
-      const { pnl } = calcPnl(pos, p);
-      return sum + pos.margin + pnl;
-    }, 0);
-    return balance + positionValue;
-  }, [balance, positions, prices]);
-  // orderBookPrice는 subscribe로 직접 구독 (아래 effect 참고)
-
-  // 오늘 이미 출석체크 했는지 판별
-  const todayKST = (() => {
-    const now = new Date();
-    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-    return kst.toISOString().slice(0, 10);
-  })();
-  const alreadyClaimed = lastAttendanceDate === todayKST;
 
   const [orderType, setOrderType] = useState<OrderType>("market");
   const [leverage, setLeverage] = useState(10);
@@ -111,31 +185,6 @@ export default function TradingPanel() {
       clearTimeout(timer);
     };
   }, []);
-
-  // 출석체크
-  const handleAttendance = useCallback(async () => {
-    if (!user) return;
-    const result = await claimAttendance(user.id);
-    if (result.success) {
-      toast.success(result.message);
-    } else {
-      toast.info(result.message);
-    }
-  }, [user, claimAttendance]);
-
-  // 리필권 사용
-  const [refilling, setRefilling] = useState(false);
-  const handleRefill = useCallback(async () => {
-    if (!user) return;
-    setRefilling(true);
-    const result = await useRefillTicket(user.id);
-    if (result.success) {
-      toast.success(result.message);
-    } else {
-      toast.error(result.message);
-    }
-    setRefilling(false);
-  }, [user, useRefillTicket]);
 
   // 비율 버튼 (수수료 역산 적용)
   // maxMargin = balance / (1 + leverage * feeRate) → 수수료 포함해도 잔고 초과 안 함
@@ -293,52 +342,7 @@ export default function TradingPanel() {
   return (
     <div className="bg-card border border-border rounded-xl p-3 flex flex-col gap-2.5">
       {/* ── 잔고 + 리필권 + 출석체크 ── */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[10px] text-muted-foreground mb-0.5">잔고 (USDT)</p>
-            <p className="text-sm font-bold text-foreground tabular-nums">
-              ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
-          {user && (
-            <button
-              onClick={handleAttendance}
-              disabled={alreadyClaimed}
-              className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-lg transition-colors ${
-                alreadyClaimed
-                  ? "bg-emerald-500/10 text-emerald-400/60 cursor-default"
-                  : "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 cursor-pointer"
-              }`}
-            >
-              {alreadyClaimed ? (
-                <><Check className="h-3 w-3" />출석 완료</>
-              ) : (
-                <><Gift className="h-3 w-3" />출석체크</>
-              )}
-            </button>
-          )}
-        </div>
-        {user && (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Ticket className="h-3 w-3 text-amber-400" />
-              리필권 <span className="font-bold text-foreground">{refillTickets}개</span>
-            </div>
-            <button
-              onClick={handleRefill}
-              disabled={refilling || positions.length > 0 || equity >= 500_000 || refillTickets <= 0}
-              className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                positions.length === 0 && equity < 500_000 && refillTickets > 0 && !refilling
-                  ? "bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 cursor-pointer"
-                  : "bg-secondary text-muted-foreground/50 cursor-not-allowed pointer-events-none"
-              }`}
-            >
-              <Ticket className="h-3 w-3" />리필하기
-            </button>
-          </div>
-        )}
-      </div>
+      <BalanceSection user={user} />
 
       <div className="h-px bg-border" />
 

@@ -1,7 +1,7 @@
 import { createRoute, redirect } from "@tanstack/react-router";
 import { rootRoute } from "./__root";
 import { useAuthStore } from "@/store/authStore";
-import LoginScreen from "@/components/LoginScreen";
+import LoginScreen from "@/components/auth/LoginScreen";
 
 export const loginRoute = createRoute({
   getParentRoute: () => rootRoute,

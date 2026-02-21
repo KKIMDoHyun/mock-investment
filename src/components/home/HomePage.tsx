@@ -2,10 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import { useSearch, useNavigate } from "@tanstack/react-router";
 import { BarChart3, BookOpen, ChevronDown } from "lucide-react";
 import { Seo } from "@/hooks/useSeo";
-import TradingChart from "@/components/TradingChart";
-import OrderBook from "@/components/OrderBook";
-import TradingPanel from "@/components/TradingPanel";
-import PositionsPanel from "@/components/PositionsPanel";
+import TradingChart from "@/components/trading/TradingChart";
+import OrderBook from "@/components/trading/OrderBook";
+import TradingPanel from "@/components/trading/TradingPanel";
+import PositionsPanel from "@/components/trading/PositionsPanel";
 import { useTradingStore, SYMBOLS } from "@/store/tradingStore";
 import type { SymbolId } from "@/store/tradingStore";
 import { useAuthStore } from "@/store/authStore";
@@ -177,22 +177,23 @@ export default function HomePage() {
   const { symbol: urlSymbol } = useSearch({ from: indexRoute.id });
   const autoRedirectedRef = useRef(false);
 
-  // URL searchParams → store 동기화 (마운트 및 URL 변경 시)
+  // URL searchParams → store 동기화
+  // urlSymbol이 바뀌면(뒤로가기, 직접 URL 입력 등) store도 갱신
   useEffect(() => {
     if (urlSymbol && urlSymbol !== selectedSymbol) {
       setSelectedSymbol(urlSymbol);
     }
-  }, [urlSymbol]); // eslint-disable-line react-hooks/exhaustive-deps
+    // selectedSymbol은 의도적으로 제외: store가 변할 때 다시 URL로 쓰는 순환을 방지
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlSymbol, setSelectedSymbol]);
 
-  // URL에 symbol이 없으면 보유 포지션의 심볼로 자동 이동
+  // URL에 symbol이 없으면 보유 포지션의 심볼로 자동 이동 (1회)
   useEffect(() => {
-    if (urlSymbol || autoRedirectedRef.current) return;
-    if (positions.length > 0) {
-      autoRedirectedRef.current = true;
-      const firstSymbol = positions[0].symbol;
-      setSelectedSymbol(firstSymbol);
-      navigate({ to: "/", search: { symbol: firstSymbol }, replace: true });
-    }
+    if (urlSymbol || autoRedirectedRef.current || positions.length === 0) return;
+    autoRedirectedRef.current = true;
+    const firstSymbol = positions[0].symbol;
+    setSelectedSymbol(firstSymbol);
+    navigate({ to: "/", search: { symbol: firstSymbol }, replace: true });
   }, [positions, urlSymbol, setSelectedSymbol, navigate]);
 
   // 유저 데이터 로드

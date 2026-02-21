@@ -840,9 +840,16 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       .single();
 
     if (error && error.code === "PGRST116") {
+      // 신규 유저: 초기 지급금 100만원으로 포트폴리오 생성
+      const INITIAL_BALANCE = 1_000_000;
       const { data: newRow, error: insertErr } = await supabase
         .from("portfolios")
-        .insert({ user_id: userId, balance: 0, total_principal: 0, refill_tickets: 0 })
+        .insert({
+          user_id: userId,
+          balance: INITIAL_BALANCE,
+          total_principal: INITIAL_BALANCE,
+          refill_tickets: 0,
+        })
         .select("balance, last_attendance_date, refill_tickets")
         .single();
 
@@ -913,62 +920,83 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   // ── 리필권 사용 ──
   useRefillTicket: async (userId) => {
-    const { balance, refillTickets, positions, prices } = get();
+    const { refillTickets, positions } = get();
 
+    // ① 클라이언트 선행 검사 (빠른 피드백)
     if (refillTickets <= 0) {
       return { success: false, message: "보유한 리필권이 없습니다." };
     }
-
     if (positions.length > 0) {
       return { success: false, message: "진행 중인 포지션을 모두 종료한 후 리필할 수 있습니다." };
     }
 
-    const positionValue = positions.reduce((sum, pos) => {
-      const p = prices[pos.symbol] || 0;
-      const { pnl } = calcPnl(pos, p);
-      return sum + pos.margin + pnl;
-    }, 0);
-    const equity = balance + positionValue;
+    // ② DB 단일 질의로 포트폴리오 + 실제 OPEN 포지션 수를 동시 확인
+    const [portfolioRes, positionCountRes] = await Promise.all([
+      supabase
+        .from("portfolios")
+        .select("balance, total_principal, refill_tickets")
+        .eq("user_id", userId)
+        .single(),
+      supabase
+        .from("trades")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("status", "OPEN"),
+    ]);
 
-    if (equity >= 500_000) {
-      return { success: false, message: "아직 자산이 충분합니다. (포지션 포함 50만원 이상)" };
-    }
-
-    const { data: curPortfolio } = await supabase
-      .from("portfolios")
-      .select("balance, total_principal, refill_tickets")
-      .eq("user_id", userId)
-      .single();
-
-    if (!curPortfolio) {
+    if (portfolioRes.error || !portfolioRes.data) {
       return { success: false, message: "포트폴리오를 찾을 수 없습니다." };
     }
 
-    const dbBalance = toNum(curPortfolio.balance);
-    const dbPrincipal = toNum(curPortfolio.total_principal);
-    const dbTickets = toNum(curPortfolio.refill_tickets);
+    // DB 실제 포지션 교차 검증 (클라이언트 상태가 stale일 경우 방어)
+    if ((positionCountRes.count ?? 0) > 0) {
+      // 클라이언트 상태도 동기화
+      const { data: freshPositions } = await supabase
+        .from("trades")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("status", "OPEN");
+      if (freshPositions) {
+        set({ positions: (freshPositions as unknown as typeof positions) });
+      }
+      return { success: false, message: "진행 중인 포지션을 모두 종료한 후 리필할 수 있습니다." };
+    }
+
+    const dbBalance = toNum(portfolioRes.data.balance);
+    const dbPrincipal = toNum(portfolioRes.data.total_principal);
+    const dbTickets = toNum(portfolioRes.data.refill_tickets);
 
     if (dbTickets <= 0) {
+      set({ refillTickets: 0 }); // 클라이언트 상태 동기화
       return { success: false, message: "보유한 리필권이 없습니다." };
     }
+
+    // DB 기준 equity 검사 (포지션이 없으므로 balance = equity)
+    if (dbBalance >= 500_000) {
+      set({ balance: dbBalance }); // 클라이언트 상태 동기화
+      return { success: false, message: "아직 자산이 충분합니다. (잔고 50만원 이상)" };
+    }
+
+    // ③ 낙관적 업데이트 — DB 응답 전에 UI를 즉시 반영해 깜빡임 제거
+    const newBalance = dbBalance + 500_000;
+    const newTickets = dbTickets - 1;
+    set({ balance: newBalance, refillTickets: newTickets });
 
     const { error: updateErr } = await supabase
       .from("portfolios")
       .update({
-        balance: dbBalance + 500_000,
+        balance: newBalance,
         total_principal: dbPrincipal + 500_000,
-        refill_tickets: dbTickets - 1,
+        refill_tickets: newTickets,
       })
       .eq("user_id", userId);
 
     if (updateErr) {
+      // 롤백: DB 실패 시 이전 값 복원
+      set({ balance: dbBalance, refillTickets: dbTickets });
       return { success: false, message: `에러: ${updateErr.message}` };
     }
 
-    set({
-      balance: dbBalance + 500_000,
-      refillTickets: dbTickets - 1,
-    });
     playSuccessSound();
     return {
       success: true,

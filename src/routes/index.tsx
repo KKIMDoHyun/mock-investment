@@ -1,6 +1,6 @@
 import { createRoute } from "@tanstack/react-router";
 import { rootRoute } from "./__root";
-import HomePage from "@/components/HomePage";
+import HomePage from "@/components/home/HomePage";
 import { SYMBOLS, type SymbolId } from "@/store/tradingStore";
 
 const VALID_SYMBOLS = Object.keys(SYMBOLS) as SymbolId[];

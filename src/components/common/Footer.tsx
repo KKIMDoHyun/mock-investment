@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Shield } from "lucide-react";
-import DonationButton from "@/components/DonationButton";
+import DonationButton from "./DonationButton";
 
 export default function Footer() {
   const year = new Date().getFullYear();

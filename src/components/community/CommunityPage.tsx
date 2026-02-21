@@ -19,7 +19,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useCommunityStore } from "@/store/communityStore";
 import type { Post, SortBy } from "@/store/communityStore";
 import { Button } from "@/ui/button";
-import WritePostModal from "@/components/WritePostModal";
+import WritePostModal from "./WritePostModal";
 
 // ── 시간 포맷 ──
 function formatRelativeTime(dateStr: string) {

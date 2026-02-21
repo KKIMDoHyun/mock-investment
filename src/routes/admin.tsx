@@ -1,6 +1,6 @@
 import { createRoute } from "@tanstack/react-router";
 import { rootRoute } from "./__root";
-import AdminPage from "@/components/AdminPage";
+import AdminPage from "@/components/admin/AdminPage";
 
 export const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
