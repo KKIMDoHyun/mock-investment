@@ -316,6 +316,12 @@ export default function CommunityPage() {
   const [writeOpen, setWriteOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // 스크롤 복원 진행 중일 때 콘텐츠를 숨겨 "위→아래 흘러내림" 깜빡임 방지
+  // 초기값을 sessionStorage에서 읽어 마운트 즉시 hidden 상태로 시작
+  const [scrollRestoring, setScrollRestoring] = useState(
+    () => !!sessionStorage.getItem(SCROLL_RESTORE_KEY)
+  );
+
   // IntersectionObserver 감지용 ref
   const bottomRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
@@ -335,16 +341,19 @@ export default function CommunityPage() {
       sessionStorage.removeItem(SCROLL_RESTORE_KEY);
       sessionStorage.removeItem(SCROLL_Y_KEY);
 
-      // 렌더링 완료 후 스크롤 복원
+      // DOM이 저장된 높이로 그려진 뒤 스크롤 이동 → 그 후 콘텐츠 표시
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           window.scrollTo(0, savedY);
+          // 스크롤 위치가 확정된 후에만 콘텐츠를 보여줌
+          setScrollRestoring(false);
         });
       });
     } else {
-      // 새로 진입: 초기화 후 첫 페이지 로드
+      // 새로 진입: 즉시 표시 후 첫 페이지 로드
       sessionStorage.removeItem(SCROLL_RESTORE_KEY);
       sessionStorage.removeItem(SCROLL_Y_KEY);
+      setScrollRestoring(false);
       fetchPosts();
       fetchUserRanks();
     }
@@ -402,7 +411,10 @@ export default function CommunityPage() {
   return (
     <>
     <Seo title="커뮤니티" description="모두모투 트레이더들의 투자 이야기. 수익 인증, 시황 분석, 자유로운 소통." url="/community" />
-    <main className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+    <main
+      className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6"
+      style={scrollRestoring ? { visibility: "hidden" } : undefined}
+    >
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">

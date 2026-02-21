@@ -2,6 +2,17 @@ import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { setSoundEnabled } from "@/lib/sound";
 
+/**
+ * 잘못 저장된 알림 링크를 정규화합니다.
+ * DB 트리거 등 외부 경로에서 '/community/post/UUID' 형태로 저장된 경우를
+ * '/community/UUID' 형태로 자동 교정합니다.
+ */
+export function sanitizeNotifLink(link: string | null | undefined): string | null {
+  if (!link) return null;
+  // /community/post/... → /community/...
+  return link.replace(/\/community\/post\//g, "/community/");
+}
+
 export type NotifType =
   | "comment"
   | "reply"
@@ -80,7 +91,11 @@ export const useNotificationStore = create<NotifState>((set, get) => ({
       .order("created_at", { ascending: false })
       .limit(50);
 
-    const notifs = (data ?? []) as AppNotification[];
+    // DB에 잘못 저장된 링크(/community/post/...)를 읽어오는 시점에 정규화
+    const notifs = ((data ?? []) as AppNotification[]).map((n) => ({
+      ...n,
+      link: sanitizeNotifLink(n.link),
+    }));
     set({
       notifications: notifs,
       unreadCount: notifs.filter((n) => !n.is_read).length,
@@ -139,7 +154,7 @@ export const useNotificationStore = create<NotifState>((set, get) => ({
         type,
         title,
         body,
-        link: link ?? null,
+        link: sanitizeNotifLink(link),
       })
       .select()
       .single();

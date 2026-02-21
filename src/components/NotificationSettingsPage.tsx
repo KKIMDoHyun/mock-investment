@@ -20,8 +20,6 @@ import {
   type AppNotification,
 } from "@/store/notificationStore";
 import { Seo } from "@/hooks/useSeo";
-import Footer from "@/components/Footer";
-
 // ── 토글 스위치 ──────────────────────────────
 function Toggle({
   checked,
@@ -78,17 +76,10 @@ function NotifItem({
   notif: AppNotification;
   onRead: (id: string) => void;
 }) {
-  const navigate = useNavigate();
-
   const handleClick = () => {
     if (!notif.is_read) onRead(notif.id);
     if (notif.link) {
-      try {
-        const url = new URL(notif.link, window.location.origin);
-        navigate({ to: url.pathname + url.search });
-      } catch {
-        window.location.href = notif.link;
-      }
+      window.location.href = notif.link;
     }
   };
 
@@ -407,7 +398,6 @@ export default function NotificationSettingsPage() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

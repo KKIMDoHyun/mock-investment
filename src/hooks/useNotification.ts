@@ -16,6 +16,7 @@ import { showNotification } from "@/lib/notification";
 import {
   useNotificationStore,
   locallyCreatedIds,
+  sanitizeNotifLink,
   type AppNotification,
 } from "@/store/notificationStore";
 import { playNotificationSound } from "@/lib/sound";
@@ -38,7 +39,12 @@ export function useNotification(userId: string | undefined) {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          const notif = payload.new as AppNotification;
+          const raw = payload.new as AppNotification;
+          // DB 트리거 등 외부 경로에서 잘못 저장된 링크를 정규화
+          const notif: AppNotification = { 
+            ...raw,
+            link: sanitizeNotifLink(raw.link),
+          };
           const { settings, addLocal } = useNotificationStore.getState();
 
           // 내가 직접 saveNotification()으로 삽입한 알림은

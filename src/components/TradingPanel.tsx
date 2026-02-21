@@ -327,9 +327,9 @@ export default function TradingPanel() {
             </div>
             <button
               onClick={handleRefill}
-              disabled={refilling || equity >= 500_000 || refillTickets <= 0}
+              disabled={refilling || positions.length > 0 || equity >= 500_000 || refillTickets <= 0}
               className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                equity < 500_000 && refillTickets > 0 && !refilling
+                positions.length === 0 && equity < 500_000 && refillTickets > 0 && !refilling
                   ? "bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 cursor-pointer"
                   : "bg-secondary text-muted-foreground/50 cursor-not-allowed pointer-events-none"
               }`}

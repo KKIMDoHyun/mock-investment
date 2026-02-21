@@ -919,6 +919,10 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       return { success: false, message: "보유한 리필권이 없습니다." };
     }
 
+    if (positions.length > 0) {
+      return { success: false, message: "진행 중인 포지션을 모두 종료한 후 리필할 수 있습니다." };
+    }
+
     const positionValue = positions.reduce((sum, pos) => {
       const p = prices[pos.symbol] || 0;
       const { pnl } = calcPnl(pos, p);
@@ -927,7 +931,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     const equity = balance + positionValue;
 
     if (equity >= 500_000) {
-      return { success: false, message: "아직 자산이 충분합니다. (포지션 포함 50만 달러 이상)" };
+      return { success: false, message: "아직 자산이 충분합니다. (포지션 포함 50만원 이상)" };
     }
 
     const { data: curPortfolio } = await supabase

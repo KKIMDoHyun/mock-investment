@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useRouterState } from "@tanstack/react-router";
 import { Toaster, toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import {
@@ -18,10 +18,11 @@ import ChatWidget from "@/components/ChatWidget";
 import InAppBrowserGuard from "@/components/InAppBrowserGuard";
 import SplashScreen from "@/components/SplashScreen";
 import { Seo } from "@/hooks/useSeo";
-import { requestNotificationPermission, showNotification } from "@/lib/notification";
+import { showNotification } from "@/lib/notification";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useNotification } from "@/hooks/useNotification";
 import { playNotificationSound } from "@/lib/sound";
+import { usePushToken } from "@/hooks/usePushToken";
 
 const MIN_SPLASH_MS = 2000;
 
@@ -32,8 +33,20 @@ export default function RootLayout() {
   const [isAppReady, setIsAppReady] = useState(false);
   const prefetchedRef = useRef(false);
 
+  // 라우트 이동 시 스크롤 최상단으로
+  // CommunityPage가 스크롤 복원 플래그(community_restore)를 갖고 있으면
+  // 해당 페이지가 직접 복원하므로 여기서는 리셋을 건너뜁니다.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    if (sessionStorage.getItem("community_restore")) return;
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [pathname]);
+
   // notifications 테이블 Realtime 구독 (외부 알림 수신 + unreadCount 갱신)
   useNotification(user?.id);
+
+  // FCM 푸시 토큰 수집 (로그인 시 자동 실행)
+  usePushToken(user?.id);
 
   useEffect(() => {
     const cleanup = initialize();
@@ -58,12 +71,7 @@ export default function RootLayout() {
     }
     useNotificationStore.getState().fetchNotifications(user.id);
     useNotificationStore.getState().fetchSettings(user.id);
-
-    // 앱 준비 후 3초 뒤 브라우저 알림 권한 요청 (UX 방해 최소화)
-    const timer = setTimeout(() => {
-      requestNotificationPermission();
-    }, 3_000);
-    return () => clearTimeout(timer);
+    // 알림 권한 요청은 usePushToken 훅에서 FCM 토큰 발급과 함께 처리합니다.
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 댓글 알림 실시간 구독 ──
