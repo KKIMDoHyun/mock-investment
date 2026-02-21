@@ -26,6 +26,7 @@ import {
   Dialog,
   DialogContent,
 } from "@/ui/dialog";
+import AdSlot from "@/components/ads/AdSlot";
 
 // ── 수익 인증 카드 파싱 ──
 
@@ -721,7 +722,10 @@ export default function CommunityPostPage() {
       description={post.content.replace(/\[PROFIT_CARD\][\s\S]*?\[\/PROFIT_CARD\]/g, "").slice(0, 120).trim() || post.title}
       url={`/community/${post.id}`}
     />
-    <main className="flex-1 w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
+    <div className="flex-1 flex items-start justify-center gap-8">
+    {/* 오른쪽 사이드바와 균형을 맞춰 본문 중앙 정렬 */}
+    <div className="hidden xl:block w-44 shrink-0" aria-hidden="true" />
+    <main className="flex-1 min-w-0 max-w-4xl px-3 sm:px-6 py-4 sm:py-6">
       {/* 상단 네비 */}
       <button
         type="button"
@@ -800,6 +804,11 @@ export default function CommunityPostPage() {
           />
           추천 {post.like_count > 0 && <span className="tabular-nums">{post.like_count}</span>}
         </button>
+      </div>
+
+      {/* 게시글-댓글 사이 광고 */}
+      <div className="mb-6">
+        <AdSlot variant="banner-bottom" />
       </div>
 
       {/* 댓글 섹션 */}
@@ -884,6 +893,15 @@ export default function CommunityPostPage() {
       {/* 맨 위로 버튼 */}
       <ScrollToTopButton />
     </main>
+
+    {/* 오른쪽 sticky 광고 사이드바 */}
+    <aside
+      className="hidden xl:flex w-44 shrink-0 sticky self-start flex-col items-center justify-center"
+      style={{ top: "56px", height: "calc(100dvh - 56px)" }}
+    >
+      <AdSlot variant="sidebar-right" />
+    </aside>
+    </div>
     </>
   );
 }

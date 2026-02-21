@@ -9,6 +9,7 @@ import PositionsPanel from "@/components/trading/PositionsPanel";
 import { useTradingStore, SYMBOLS } from "@/store/tradingStore";
 import type { SymbolId } from "@/store/tradingStore";
 import { useAuthStore } from "@/store/authStore";
+import AdSlot from "@/components/ads/AdSlot";
 import { indexRoute } from "@/routes/index";
 
 // ── 현재가 + 전일 대비 변동 표시 (독립 컴포넌트 → 가격 변동 시 이것만 리렌더) ──
@@ -232,48 +233,63 @@ export default function HomePage() {
   return (
     <>
       <Seo url="/" />
-    <main className="flex-1 w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-4 flex flex-col gap-2 sm:gap-4">
+    <div className="flex-1 flex">
+      {/* 좌측 광고 사이드바 */}
+      <aside
+        className="hidden xl:flex w-44 shrink-0 sticky self-start flex-col items-center justify-center"
+        style={{ top: "56px", height: "calc(100dvh - 56px)" }}
+      >
+        <AdSlot variant="sidebar-left" />
+      </aside>
+
+    <main className="flex-1 min-w-0 px-2 sm:px-4 lg:px-8 pt-6 sm:pt-10 pb-2 sm:pb-4 flex flex-col gap-2 sm:gap-4">
       {/* ── 상단 종목 정보 바 ── */}
       <SymbolBar />
 
-      {/* ── 차트 + 호가창 + 주문 패널 ── */}
-      {/*
-        items-start: 각 열이 자신의 자연 높이만큼만 차지합니다.
-        차트만 명시적 height를 갖고, 호가창/주문창은 컨텐츠 높이에 따라 자동 결정됩니다.
-        고해상도에서도 호가창·주문창이 차트 높이까지 강제로 늘어나지 않습니다.
-      */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_200px_360px] gap-2 sm:gap-4 lg:items-start">
-        {/* 모바일: 차트/호가 탭 전환 */}
+      {/* ── 모바일: 차트/호가 탭 + 주문창 ── */}
+      <div className="lg:hidden flex flex-col gap-2 sm:gap-4">
         <MobileChartOrderBook />
+        <TradingPanel />
+      </div>
 
-        {/* 데스크탑: 차트 — TradingView는 명시적 height 필요. 최소 480, 최대 680px로 제한 */}
+      {/* ── 데스크탑: 차트 | [호가창·주문창 + 광고] ──
+           우측 세로 묶음 높이 = 차트 높이
+           호가창·주문창 행이 flex-1 로 팽창, 광고가 나머지 채움
+      */}
+      <div className="hidden lg:grid lg:grid-cols-[1fr_auto] gap-4">
+        {/* 차트 */}
         <div
-          className="hidden lg:flex lg:flex-col bg-card border border-border rounded-xl overflow-hidden"
+          className="flex flex-col bg-card border border-border rounded-xl overflow-hidden"
           style={{ height: "clamp(480px, calc(100dvh - 220px), 760px)" }}
         >
           <TradingChart />
         </div>
 
-        {/* 데스크탑: 호가창 — 자연 높이, 차트 max-height와 동일하게 제한 */}
+        {/* 오른쪽 묶음: [호가창 + 주문창] + 광고 */}
         <div
-          className="hidden lg:block overflow-y-auto rounded-xl"
-          style={{ maxHeight: "clamp(480px, calc(100dvh - 220px), 760px)" }}
+          className="flex flex-col gap-4 overflow-y-auto"
+          style={{ height: "clamp(480px, calc(100dvh - 220px), 760px)" }}
         >
-          <OrderBook />
-        </div>
+          {/* 호가창 + 주문창 */}
+          <div className="flex gap-4">
+            <div className="w-[200px] rounded-xl shrink-0 min-h-[420px]">
+              <OrderBook />
+            </div>
+            <div className="w-[360px] rounded-xl shrink-0 min-h-[460px]">
+              <TradingPanel />
+            </div>
+          </div>
 
-        {/* 주문 패널 — 자연 높이, 넘칠 경우 스크롤 */}
-        <div
-          className="lg:rounded-xl lg:overflow-y-auto"
-          style={{ maxHeight: "clamp(480px, calc(100dvh - 220px), 760px)" }}
-        >
-          <TradingPanel />
         </div>
       </div>
 
       {/* ── 하단: 포지션 / 거래 내역 ── */}
       <PositionsPanel />
+
+      {/* ── 하단 배너 광고 ── */}
+      <AdSlot variant="banner-bottom" />
     </main>
+    </div>
     </>
   );
 }

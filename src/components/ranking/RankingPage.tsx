@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Trophy, Loader2, TrendingUp, DollarSign, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Seo } from "@/hooks/useSeo";
+import AdSlot from "@/components/ads/AdSlot";
 
 // ── PnL 계산 (tradingStore의 calcPnl과 동일 로직, 순환 의존 방지를 위해 인라인) ──
 function calcUnrealizedPnl(
@@ -499,23 +500,44 @@ export default function RankingPage() {
   return (
     <>
       <Seo title="랭킹" description="모두모투 트레이더 수익률·수익금·총자산 랭킹. 상위 15위까지 실시간 확인." url="/ranking" />
-      <main className="flex-1 w-full max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-8 flex flex-col gap-4 sm:gap-5">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
-            <Trophy className="h-5 w-5 text-amber-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">랭킹</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              상위 {MAX_RANK}위까지 표시됩니다
-            </p>
-          </div>
-        </div>
+      <div className="flex-1 flex items-start justify-center gap-8">
+        {/* 좌측 광고 사이드바 */}
+        <aside
+          className="hidden xl:flex w-44 shrink-0 sticky self-start flex-col items-center justify-center"
+          style={{ top: "56px", height: "calc(100dvh - 56px)" }}
+        >
+          <AdSlot variant="sidebar-left" />
+        </aside>
 
-        <TotalRankingTable users={users} />
-        <RankingTable mode="roe" users={users} />
-        <RankingTable mode="profit" users={users} />
-      </main>
+        <main className="w-full max-w-[600px] px-3 sm:px-0 py-4 sm:py-8 flex flex-col gap-4 sm:gap-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
+              <Trophy className="h-5 w-5 text-amber-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">랭킹</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                상위 {MAX_RANK}위까지 표시됩니다
+              </p>
+            </div>
+          </div>
+
+          <TotalRankingTable users={users} />
+          <RankingTable mode="roe" users={users} />
+          <RankingTable mode="profit" users={users} />
+
+          {/* 하단 배너 광고 */}
+          <AdSlot variant="banner-bottom" />
+        </main>
+
+        {/* 우측 광고 사이드바 */}
+        <aside
+          className="hidden xl:flex w-44 shrink-0 sticky self-start flex-col items-center justify-center"
+          style={{ top: "56px", height: "calc(100dvh - 56px)" }}
+        >
+          <AdSlot variant="sidebar-right" />
+        </aside>
+      </div>
     </>
   );
 }

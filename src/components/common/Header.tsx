@@ -60,7 +60,7 @@ export default function Header() {
                 className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-secondary transition-colors no-underline"
               >
                 <Trophy className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                <span>랭킹</span>
+                <span className="hidden sm:inline">랭킹</span>
               </Link>
               <Link
                 to="/community"
@@ -71,7 +71,7 @@ export default function Header() {
                 className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-secondary transition-colors no-underline"
               >
                 <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                <span>커뮤니티</span>
+                <span className="hidden sm:inline">커뮤니티</span>
               </Link>
             </nav>
           </div>
@@ -86,7 +86,8 @@ export default function Header() {
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
                 </span>
                 <span className="tabular-nums">
-                  접속 {onlineCount}명
+                  <span className="sm:hidden">{onlineCount}</span>
+                  <span className="hidden sm:inline">접속 {onlineCount}명</span>
                 </span>
               </div>
             )}

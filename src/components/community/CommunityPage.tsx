@@ -20,6 +20,7 @@ import { useCommunityStore } from "@/store/communityStore";
 import type { Post, SortBy } from "@/store/communityStore";
 import { Button } from "@/ui/button";
 import WritePostModal from "./WritePostModal";
+import AdSlot from "@/components/ads/AdSlot";
 
 // ── 시간 포맷 ──
 function formatRelativeTime(dateStr: string) {
@@ -411,10 +412,19 @@ export default function CommunityPage() {
   return (
     <>
     <Seo title="커뮤니티" description="모두모투 트레이더들의 투자 이야기. 수익 인증, 시황 분석, 자유로운 소통." url="/community" />
-    <main
-      className="flex-1 w-full max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6"
+    <div
+      className="flex-1 flex items-start justify-center gap-8"
       style={scrollRestoring ? { visibility: "hidden" } : undefined}
     >
+    {/* 좌측 광고 사이드바 */}
+    <aside
+      className="hidden xl:flex w-44 shrink-0 sticky self-start flex-col items-center justify-center"
+      style={{ top: "56px", height: "calc(100dvh - 56px)" }}
+    >
+      <AdSlot variant="sidebar-left" />
+    </aside>
+
+    <main className="flex-1 min-w-0 max-w-2xl px-3 sm:px-4 py-4 sm:py-6">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
@@ -506,6 +516,11 @@ export default function CommunityPage() {
         </div>
       )}
 
+      {/* 하단 배너 광고 */}
+      <div className="mt-4">
+        <AdSlot variant="banner-bottom" />
+      </div>
+
       {/* 글쓰기 모달 */}
       <WritePostModal open={writeOpen} onOpenChange={setWriteOpen} />
 
@@ -520,6 +535,15 @@ export default function CommunityPage() {
         }}
       />
     </main>
+
+    {/* 우측 광고 사이드바 */}
+    <aside
+      className="hidden xl:flex w-44 shrink-0 sticky self-start flex-col items-center justify-center"
+      style={{ top: "56px", height: "calc(100dvh - 56px)" }}
+    >
+      <AdSlot variant="sidebar-right" />
+    </aside>
+    </div>
     </>
   );
 }

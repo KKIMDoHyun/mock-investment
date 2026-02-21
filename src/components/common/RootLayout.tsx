@@ -110,7 +110,12 @@ export default function RootLayout() {
       <InAppBrowserGuard />
       <TermsAgreementModal />
       <Header />
-      <Outlet />
+
+      {/* 페이지 콘텐츠 */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <Outlet />
+      </div>
+
       <Footer />
       <NicknameSetupModal />
       <ChatWidget />
